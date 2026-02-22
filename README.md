@@ -653,5 +653,3 @@ This project is open source and available for educational and portfolio purposes
 - DistilBERT model creators
 
 ---
-
-**Enterprise-level AI project demonstrating production ML engineering and data science skills**
