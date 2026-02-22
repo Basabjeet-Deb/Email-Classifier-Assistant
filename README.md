@@ -643,6 +643,7 @@ This project is open source and available for educational and portfolio purposes
 **Basabjeet Deb**
 - GitHub: [@Basabjeet-Deb](https://github.com/Basabjeet-Deb)
 - LinkedIn: [Connect with me](https://linkedin.com/in/basabjeet-deb)
+- Portfolio: [Basabjeet Deb](https://basabjeet-deb.github.io/)
 
 ## Acknowledgments
 
