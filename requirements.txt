@@ -1,0 +1,16 @@
+# Core dependencies
+google-auth==2.27.0
+google-auth-oauthlib==1.2.0
+google-auth-httplib2==0.2.0
+google-api-python-client==2.116.0
+
+# ML dependencies - numpy must be installed first
+numpy>=1.24.0,<2.0.0
+transformers==4.37.2
+torch==2.2.0
+sentencepiece==0.1.99
+
+# Web server dependencies
+fastapi==0.109.2
+uvicorn[standard]==0.27.1
+pydantic==2.6.1

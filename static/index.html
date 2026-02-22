@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Email Classifier - Enterprise Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="logo">
+            <div class="logo-icon"></div>
+            <span>AI Email Classifier</span>
+        </div>
+        <div class="header-right">
+            <div class="status-indicator">
+                <div class="status-dot"></div>
+                <span id="statusText">Checking...</span>
+            </div>
+            <div class="account-avatar" id="activeAvatar" onclick="toggleDropdown()">?</div>
+            <div class="account-dropdown" id="accountDropdown"></div>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="container">
+        <div class="dashboard">
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <!-- Scan Control -->
+                <div class="card glass">
+                    <h3 class="card-title">Scan Control</h3>
+                    <button class="btn btn-primary" id="btnScan" onclick="scanInbox()">
+                        <span id="scanIcon"></span>
+                        <span id="scanText">Analyze Inbox</span>
+                    </button>
+                    
+                    <div class="form-group" style="margin-top: 1.5rem;">
+                        <label class="form-label">Fetch Limit</label>
+                        <select id="scanLimit" class="form-select">
+                            <option value="10">10 Messages</option>
+                            <option value="50" selected>50 Messages</option>
+                            <option value="100">100 Messages</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Target Category</label>
+                        <select id="scanType" class="form-select">
+                            <option value="in:inbox category:promotions OR is:unread">Promos & Unread</option>
+                            <option value="is:unread">Unread Only</option>
+                            <option value="category:promotions">All Promotions</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Stats -->
+                <div class="card glass">
+                    <h3 class="card-title">Statistics</h3>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-value" id="totalScanned">0</div>
+                            <div class="stat-label">Scanned</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="avgConfidence">0%</div>
+                            <div class="stat-label">Avg Confidence</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Delete Control -->
+                <div class="card glass">
+                    <h3 class="card-title">Actions</h3>
+                    <button class="btn btn-danger" id="btnDelete" onclick="deleteSelected()" disabled>
+                        <span id="deleteIcon">🗑️</span>
+                        <span id="deleteText">Delete (0)</span>
+                    </button>
+                </div>
+
+                <!-- ML Info -->
+                <div class="card glass">
+                    <div class="metric-row">
+                        <span class="metric-label">ML Model</span>
+                        <span class="metric-value">DistilBERT</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Method</span>
+                        <span class="metric-value">Ensemble</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Sentiment</span>
+                        <span class="metric-value">Enabled</span>
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- Main Content -->
+            <div class="main-content">
+                <!-- Table -->
+                <div class="card glass table-container">
+                    <div class="table-header">
+                        <h2 class="table-title">Inbox Analysis</h2>
+                        <div class="table-stats" id="tableStats">Ready to scan</div>
+                    </div>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th style="width: 40px;">
+                                        <input type="checkbox" id="selectAll" onclick="toggleSelectAll()">
+                                    </th>
+                                    <th style="width: 180px;">Category</th>
+                                    <th style="width: 80px;">Confidence</th>
+                                    <th style="width: 250px;">Sender</th>
+                                    <th>Subject & Preview</th>
+                                </tr>
+                            </thead>
+                            <tbody id="emailList">
+                                <tr>
+                                    <td colspan="5">
+                                        <div class="empty-state">
+                                            <div class="empty-icon">📧</div>
+                                            <p>Click "Analyze Inbox" to start ML classification</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
