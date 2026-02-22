@@ -3,6 +3,11 @@ credentials.json
 token*.json
 *.json.secret
 
+# Database
+email_analytics.db
+*.db
+*.db-journal
+
 # Python
 __pycache__/
 *.py[cod]

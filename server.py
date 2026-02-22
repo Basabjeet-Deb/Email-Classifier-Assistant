@@ -6,6 +6,7 @@ from pydantic import BaseModel
 import uvicorn
 
 import main as email_core
+import database as db
 
 app = FastAPI(title="Email Classifier Assistant API")
 
@@ -77,6 +78,10 @@ def scan_emails(req: ScanRequest):
     
     try:
         result = email_core.process_emails(service, max_results=req.max_results, query=req.query)
+        
+        # Store classifications in database for analytics
+        db.store_batch_classifications(req.account_id, result['emails'])
+        
         return {
             "status": "success",
             "processed_count": result['total_count'],
@@ -100,6 +105,20 @@ def delete_emails(request: DeleteRequest):
     try:
         count = email_core.delete_messages(service, request.message_ids)
         return {"status": "success", "deleted_count": count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analytics/{account_id}")
+def get_analytics(account_id: str, days: int = 30):
+    """Get analytics data for the specified account."""
+    try:
+        analytics = db.get_analytics_summary(account_id, days)
+        insights = db.get_insights(account_id)
+        return {
+            "status": "success",
+            "analytics": analytics,
+            "insights": insights
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
