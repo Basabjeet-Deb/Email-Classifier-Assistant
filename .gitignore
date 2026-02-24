@@ -48,6 +48,8 @@ Thumbs.db
 # ML Models cache
 .cache/
 transformers_cache/
+tfidf_model.pkl
+*.pkl
 
 # Cleanup files
 CLEANUP_SUMMARY.txt
