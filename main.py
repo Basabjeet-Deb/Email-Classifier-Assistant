@@ -1,5 +1,8 @@
 import os.path
 import time
+import pickle
+from pathlib import Path
+from functools import wraps
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -9,7 +12,41 @@ from googleapiclient.errors import HttpError
 
 _ml_pipeline = None
 _sentiment_pipeline = None
+_tfidf_classifier = None
 _classification_cache = {}
+
+# Rate limiting configuration
+RATE_LIMIT_DELAY = 0.5  # 500ms delay between API calls (very conservative)
+MAX_RETRIES = 5
+INITIAL_BACKOFF = 3  # seconds (increased from 2)
+
+def rate_limited_api_call(func):
+    """Decorator to add rate limiting and exponential backoff to Gmail API calls."""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        retries = 0
+        backoff = INITIAL_BACKOFF
+        
+        while retries < MAX_RETRIES:
+            try:
+                # Add small delay between calls
+                time.sleep(RATE_LIMIT_DELAY)
+                return func(*args, **kwargs)
+            except HttpError as error:
+                if error.resp.status in [429, 503]:  # Rate limit or service unavailable
+                    retries += 1
+                    if retries >= MAX_RETRIES:
+                        print(f"Max retries reached for {func.__name__}")
+                        raise
+                    
+                    wait_time = backoff * (2 ** (retries - 1))  # Exponential backoff
+                    print(f"Rate limit hit. Waiting {wait_time}s before retry {retries}/{MAX_RETRIES}...")
+                    time.sleep(wait_time)
+                else:
+                    raise
+        
+        return None
+    return wrapper
 
 def get_ml_classifier():
     """Lazily load the HuggingFace zero-shot classification pipeline."""
@@ -19,11 +56,11 @@ def get_ml_classifier():
             import numpy as np
             print(f"Numpy version: {np.__version__}")
             from transformers import pipeline
-            print("Loading ML Classification Model (DistilBERT zero-shot)...")
-            # Using a fast, lightweight distilbert MNLI model for zero-shot text classification
+            print("Loading ML Classification Model (Valhalla DistilBART MNLI)...")
+            # Using Valhalla's optimized distilbart-mnli model (smaller, faster)
             _ml_pipeline = pipeline(
                 "zero-shot-classification", 
-                model="typeform/distilbert-base-uncased-mnli", 
+                model="valhalla/distilbart-mnli-12-3",  # Professor's recommendation
                 device=-1,
                 batch_size=8  # Process multiple emails at once
             )
@@ -58,6 +95,280 @@ def get_sentiment_analyzer():
             print(f"Failed to load sentiment pipeline: {e}")
             return None
     return _sentiment_pipeline
+
+
+def get_tfidf_classifier():
+    """
+    Lazily load or train the TF-IDF + Logistic Regression classifier.
+    This is a CPU-friendly alternative to zero-shot learning.
+    Professor's recommendation: Better accuracy, faster inference.
+    """
+    global _tfidf_classifier
+    if _tfidf_classifier is None:
+        try:
+            from sklearn.feature_extraction.text import TfidfVectorizer
+            from sklearn.linear_model import LogisticRegression
+            from sklearn.pipeline import Pipeline
+            import numpy as np
+            
+            BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+            model_path = os.path.join(BASE_DIR, 'tfidf_model.pkl')
+            
+            # Try to load existing model
+            if os.path.exists(model_path):
+                print("Loading TF-IDF classifier from disk...")
+                with open(model_path, 'rb') as f:
+                    _tfidf_classifier = pickle.load(f)
+                print("TF-IDF classifier loaded successfully.")
+            else:
+                print("Training new TF-IDF classifier...")
+                # Train on synthetic data (will be replaced with real data after first scan)
+                _tfidf_classifier = train_tfidf_classifier()
+                
+                # Save the model
+                with open(model_path, 'wb') as f:
+                    pickle.dump(_tfidf_classifier, f)
+                print("TF-IDF classifier trained and saved.")
+                
+        except Exception as e:
+            print(f"Failed to load/train TF-IDF classifier: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    return _tfidf_classifier
+
+
+def train_tfidf_classifier():
+    """
+    Train a TF-IDF + Logistic Regression classifier.
+    Uses historical data from database if available, otherwise uses synthetic training data.
+    """
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.pipeline import Pipeline
+    
+    # Try to get historical data from database
+    try:
+        from database import DB_PATH
+        import sqlite3
+        
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT subject, sender, category 
+            FROM classifications 
+            WHERE confidence > 0.7
+            LIMIT 1000
+        ''')
+        rows = cursor.fetchall()
+        conn.close()
+        
+        if len(rows) > 50:  # Need at least 50 samples
+            print(f"Training on {len(rows)} historical classifications...")
+            texts = [f"{row[0]} {row[1]}" for row in rows]
+            labels = [row[2] for row in rows]
+        else:
+            raise ValueError("Not enough historical data")
+            
+    except Exception as e:
+        print(f"Using augmented training data: {e}")
+        # Augmented training data for 5 categories (200+ examples)
+        texts = [
+            # Banking/Financial (40 examples)
+            "Account statement for January 2024", "Your credit card payment is due tomorrow",
+            "Transaction alert: Rs 5000 debited from your account", "Netbanking password reset successful",
+            "UPI payment of Rs 2500 received", "Minimum balance alert in savings account",
+            "Your loan EMI is due on 15th", "Credit card bill generated for this month",
+            "NEFT transfer successful - Rs 10000", "IMPS transaction completed",
+            "Account balance: Rs 45000 as of today", "Debit card blocked due to suspicious activity",
+            "Fixed deposit matured - Rs 100000", "Interest credited to your account",
+            "Overdraft facility activated", "Cheque bounce notification",
+            "Standing instruction set up successfully", "Auto-debit enabled for bill payment",
+            "Your account has been debited with Rs 1500", "Monthly account statement attached",
+            "KYC update required for your bank account", "New credit card dispatched",
+            "ATM withdrawal of Rs 3000", "Online banking registration successful",
+            "Reward points credited - 500 points", "Credit limit increased to Rs 200000",
+            "Payment reminder for credit card dues", "Account upgrade to premium tier",
+            "Tax deducted at source - Rs 5000", "Mutual fund investment confirmation",
+            "Insurance premium payment successful", "Loan application approved",
+            "Direct deposit received from employer", "Wire transfer initiated",
+            "Savings account interest rate changed", "Mobile banking app login detected",
+            "Security alert: New device login", "Card CVV changed successfully",
+            "Recurring deposit installment due", "Investment portfolio summary",
+            "Forex transaction completed", "Cashback credited to account",
+            
+            # Shopping/Orders (40 examples)
+            "Your Amazon order has been shipped", "Order confirmation - Order #12345",
+            "Delivery scheduled for tomorrow between 10 AM - 2 PM", "Invoice for your recent purchase",
+            "Package out for delivery", "Thank you for your order from Flipkart",
+            "Your order has been delivered", "Return request approved",
+            "Refund initiated for cancelled order", "Product review request",
+            "Order dispatched from warehouse", "Tracking number: 1234567890",
+            "Your Myntra order is arriving today", "Payment successful for order",
+            "Order placed successfully", "Estimated delivery: 3-5 business days",
+            "Your Swiggy order is being prepared", "Zomato: Your food is on the way",
+            "Uber ride receipt", "Ola cab booking confirmed",
+            "Your grocery order from BigBasket", "Blinkit: Order delivered",
+            "Dunzo delivery completed", "Zepto order arriving in 10 minutes",
+            "Your medicine order from PharmEasy", "1mg: Prescription uploaded successfully",
+            "Lenskart: Your eyewear order shipped", "Nykaa order confirmation",
+            "Ajio: Your fashion order dispatched", "Meesho order placed",
+            "Your book order from Amazon", "Kindle purchase receipt",
+            "Netflix subscription renewed", "Spotify premium payment",
+            "Your flight ticket booking confirmed", "Hotel reservation successful",
+            "Train ticket booked - PNR: 1234567890", "Bus ticket confirmation",
+            "Movie ticket booking confirmed", "Event pass purchased",
+            
+            # Work/Career (40 examples)
+            "Meeting scheduled for 3 PM today", "Job application received for Software Engineer",
+            "Interview invitation for tomorrow", "Project deadline reminder - Due Friday",
+            "LinkedIn connection request from John Doe", "Your resume has been shortlisted",
+            "Naukri: New job alert matching your profile", "Indeed: 5 new jobs for you",
+            "Glassdoor: Company review request", "AngelList: Startup job opportunity",
+            "Internshala: Internship application update", "Unstop: Hackathon registration confirmed",
+            "Team meeting rescheduled to 4 PM", "Conference call link for client meeting",
+            "Slack: You were mentioned in #general", "Microsoft Teams meeting invite",
+            "Zoom meeting starting in 10 minutes", "Google Meet link for interview",
+            "Your timesheet is pending approval", "Leave application approved",
+            "Salary slip for January 2024", "Offer letter from XYZ Company",
+            "Background verification initiated", "Onboarding documents required",
+            "Performance review scheduled", "Training session tomorrow at 11 AM",
+            "Project update from manager", "Code review requested on GitHub",
+            "Pull request merged successfully", "Build failed - Action required",
+            "Jira: New task assigned to you", "Trello: Card moved to In Progress",
+            "Asana: Project deadline approaching", "Monday.com: Status update needed",
+            "Your article published on Medium", "LinkedIn: Your post got 100 likes",
+            "GitHub: New follower", "Stack Overflow: Answer accepted",
+            "Coursera: Course completion certificate", "Udemy: New course recommendation",
+            
+            # Promotional (40 examples)
+            "50% off sale ends tonight - Shop now", "Limited time offer: Buy 1 Get 1 Free",
+            "Exclusive deal just for you", "Flash sale starting in 1 hour",
+            "Clearance sale: Up to 70% off", "Mega sale this weekend",
+            "Don't miss: Biggest sale of the year", "Last chance to save big",
+            "Special offer: Free shipping on all orders", "Discount code inside: SAVE20",
+            "Subscribe now and get 3 months free", "Register today for early access",
+            "Join our loyalty program", "Refer a friend and earn rewards",
+            "Hot deal alert: Limited stock", "Price drop notification",
+            "Your wishlist items are on sale", "Abandoned cart: Complete your purchase",
+            "New arrivals: Check out latest collection", "Seasonal sale now live",
+            "Black Friday deals starting now", "Cyber Monday exclusive offers",
+            "Diwali special: Festive discounts", "Christmas sale: Gift ideas inside",
+            "New Year offers: Start fresh", "Valentine's Day special deals",
+            "Summer sale: Beat the heat", "Monsoon offers: Stay dry",
+            "Back to school sale", "End of season clearance",
+            "Member exclusive: Early access sale", "VIP sale: Invitation only",
+            "Free trial for 30 days", "Upgrade now and save 40%",
+            "Limited edition product launch", "Pre-order now: Special price",
+            "Restock alert: Popular item back", "Price match guarantee",
+            "Bundle offer: Save more", "Combo deal: Best value",
+            
+            # Personal/Other (40 examples)
+            "Weekly newsletter from TechCrunch", "Your daily digest from Medium",
+            "Monthly update from our community", "Facebook: Friend request from Jane",
+            "Instagram: New follower", "Twitter: You were mentioned in a tweet",
+            "WhatsApp: New message from Mom", "Telegram: New channel post",
+            "Reddit: Your post got 50 upvotes", "Quora: New answer to your question",
+            "Pinterest: New pin from your board", "Tumblr: New follower",
+            "YouTube: New video from subscribed channel", "Spotify: New playlist for you",
+            "Apple Music: Weekly mix ready", "Netflix: New shows added",
+            "Prime Video: Watch list update", "Disney+: New episode released",
+            "Webinar invitation: Learn about AI", "Online course enrollment confirmation",
+            "Workshop registration successful", "Seminar reminder for tomorrow",
+            "Podcast episode: New release", "Blog post: Weekly roundup",
+            "News alert: Breaking news", "Weather update: Rain expected",
+            "Sports update: Match highlights", "Horoscope for today",
+            "Recipe of the day", "Fitness tip: Daily workout",
+            "Meditation reminder", "Health tip: Stay hydrated",
+            "Book recommendation: Bestseller", "Movie review: Latest release",
+            "Travel guide: Top destinations", "Photography tips: Lighting basics",
+            "Cooking class invitation", "Art exhibition this weekend",
+            "Music concert tickets available", "Theater show booking open",
+        ]
+        
+        labels = (
+            ["Banking/Financial"] * 40 +
+            ["Shopping/Orders"] * 40 +
+            ["Work/Career"] * 40 +
+            ["Promotional"] * 40 +
+            ["Personal/Other"] * 40
+        )
+    
+    # Create pipeline
+    pipeline = Pipeline([
+        ('tfidf', TfidfVectorizer(
+            max_features=1000,
+            ngram_range=(1, 2),
+            stop_words='english',
+            min_df=1
+        )),
+        ('clf', LogisticRegression(
+            max_iter=1000,
+            multi_class='multinomial',
+            solver='lbfgs',
+            C=1.0
+        ))
+    ])
+    
+    # Train
+    pipeline.fit(texts, labels)
+    return pipeline
+
+
+def retrain_tfidf_from_database():
+    """
+    Retrain the TF-IDF classifier using historical data from the database.
+    Call this periodically to improve accuracy.
+    """
+    global _tfidf_classifier
+    
+    try:
+        print("Retraining TF-IDF classifier from database...")
+        _tfidf_classifier = train_tfidf_classifier()
+        
+        # Save the updated model
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        model_path = os.path.join(BASE_DIR, 'tfidf_model.pkl')
+        with open(model_path, 'wb') as f:
+            pickle.dump(_tfidf_classifier, f)
+        
+        print("TF-IDF classifier retrained successfully.")
+        return True
+    except Exception as e:
+        print(f"Failed to retrain TF-IDF classifier: {e}")
+        return False
+
+
+def classify_with_tfidf(subject, sender, body_snippet):
+    """
+    Classify email using TF-IDF + Logistic Regression.
+    CPU-friendly alternative to zero-shot learning.
+    Returns (category, confidence, all_scores).
+    """
+    classifier = get_tfidf_classifier()
+    if not classifier:
+        return "Other", 0.5, {}
+    
+    try:
+        # Prepare text
+        text = f"{subject} {sender} {body_snippet[:200]}"
+        
+        # Predict
+        category = classifier.predict([text])[0]
+        probabilities = classifier.predict_proba([text])[0]
+        
+        # Get all scores
+        classes = classifier.classes_
+        all_scores = {cls: float(prob) for cls, prob in zip(classes, probabilities)}
+        
+        # Get confidence for predicted category
+        confidence = max(probabilities)
+        
+        return category, confidence, all_scores
+        
+    except Exception as e:
+        print(f"TF-IDF classification error: {e}")
+        return "Other", 0.5, {}
 
 # If modifying these scopes, delete the token files to re-authenticate.
 # We need full Gmail access to label, modify, and delete emails.
@@ -137,14 +448,14 @@ def extract_email_features(subject, sender, body_snippet):
 
 def classify_with_keywords(subject, sender, body_snippet, features):
     """
-    Rule-based classification using expanded keyword matching and sender analysis.
+    Rule-based classification using keyword matching - UPDATED TO 5 CATEGORIES.
     Returns (category, confidence, matched_keywords) or (None, 0, []) if no match.
     """
     combined_text = f"{subject} {body_snippet}".lower()
     sender_lower = sender.lower()
     sender_domain = features['sender_domain'].lower()
     
-    # Expanded keyword sets with weights
+    # Expanded keyword sets - CONSOLIDATED TO 5 CATEGORIES
     banking_keywords = [
         'account statement', 'transaction', 'balance', 'credit card', 'debit card',
         'payment', 'netbanking', 'upi', 'neft', 'rtgs', 'imps',
@@ -153,15 +464,15 @@ def classify_with_keywords(subject, sender, body_snippet, features):
     ]
     banking_domains = ['bank', 'sbi', 'hdfc', 'icici', 'axis', 'kotak', 'paytm', 'phonepe', 'gpay', 'citi', 'hsbc']
     
-    receipt_keywords = [
+    shopping_keywords = [
         'order confirmation', 'receipt', 'invoice', 'shipped', 'delivery',
         'tracking', 'your order', 'purchase', 'payment successful', 'order placed',
         'dispatched', 'out for delivery', 'delivered', 'order #', 'order number',
         'thank you for your order', 'shipment', 'package', 'courier', 'tracking number'
     ]
-    receipt_domains = ['amazon', 'flipkart', 'myntra', 'swiggy', 'zomato', 'uber', 'ola', 'ebay', 'shopify']
+    shopping_domains = ['amazon', 'flipkart', 'myntra', 'swiggy', 'zomato', 'uber', 'ola', 'ebay', 'shopify']
     
-    # PRIORITY: Check promotional keywords FIRST (before checking sender domain)
+    # PRIORITY: Check promotional keywords FIRST
     promo_keywords = [
         'special offer', 'discount', 'sale', 'limited time', 'offer expires',
         'buy now', 'shop now', 'deal', 'save', 'free trial', 'subscribe now',
@@ -169,14 +480,7 @@ def classify_with_keywords(subject, sender, body_snippet, features):
         'promotional', 'advertisement', 'marketing', 'off %', '% off', 'claim your',
         'dont miss', "don't miss", 'last chance', 'hurry', 'act now', 'limited offer',
         'flash sale', 'clearance', 'mega sale', 'biggest sale', 'offer valid', 'promo code',
-        'apply now', 'get ready', 'hot tip', 'register today', 'join the', 'demat account',
-        'free', 'click here', 'learn more', 'find out', 'discover', 'explore'
-    ]
-    
-    newsletter_keywords = [
-        'newsletter', 'weekly digest', 'monthly update', 'learn', 'course',
-        'training', 'tutorial', 'masterclass', 'certification', 'skills',
-        'webinar', 'workshop', 'session', 'class', 'lesson', 'module', 'udemy', 'coursera'
+        'apply now', 'get ready', 'hot tip', 'register today', 'free', 'click here'
     ]
     
     work_keywords = [
@@ -185,66 +489,54 @@ def classify_with_keywords(subject, sender, body_snippet, features):
         'project', 'deadline', 'task', 'team', 'colleague', 'conference call'
     ]
     
-    social_keywords = [
-        'facebook', 'twitter', 'instagram', 'linkedin', 'notification',
-        'liked your', 'commented on', 'tagged you', 'friend request',
-        'connection request', 'mentioned you', 'shared', 'posted', 'follow'
+    # Personal/Other includes: newsletters, social, personal emails
+    personal_keywords = [
+        'newsletter', 'weekly digest', 'monthly update', 'facebook', 'twitter', 
+        'instagram', 'notification', 'liked your', 'commented on', 'friend request',
+        'connection request', 'webinar', 'course', 'training'
     ]
     
-    # Check each category with domain and keyword matching
     matched_keywords = []
     
-    # STEP 1: Check for promotional content FIRST (highest priority to avoid false positives)
+    # STEP 1: Check for promotional content FIRST
     promo_matches = [kw for kw in promo_keywords if kw in combined_text]
-    newsletter_matches = [kw for kw in newsletter_keywords if kw in combined_text]
-    
     if promo_matches:
-        # Even if sender is a bank/company, if content is promotional, classify as such
-        if newsletter_matches or 'course' in combined_text or 'webinar' in combined_text:
-            matched_keywords = newsletter_matches
-            return "Newsletters", 0.87, matched_keywords
-        else:
-            matched_keywords = promo_matches
-            return "Spam/Promotional", 0.91, matched_keywords
+        matched_keywords = promo_matches
+        return "Promotional", 0.91, matched_keywords
     
-    # STEP 2: Check Banking/Financial (only if NOT promotional)
+    # STEP 2: Check Banking/Financial
     banking_matches = [kw for kw in banking_keywords if kw in combined_text]
     if banking_matches or any(domain in sender_domain for domain in banking_domains):
-        # Double-check it's not promotional even if from bank
-        if not any(kw in combined_text for kw in ['apply now', 'register', 'join', 'offer', 'free']):
-            matched_keywords = banking_matches
-            confidence = 0.95 if banking_matches else 0.85  # Lower confidence if only domain match
-            return "Banking/Financial", confidence, matched_keywords
+        matched_keywords = banking_matches
+        confidence = 0.95 if banking_matches else 0.85
+        return "Banking/Financial", confidence, matched_keywords
     
-    # STEP 3: Check Receipts/Orders
-    receipt_matches = [kw for kw in receipt_keywords if kw in combined_text]
-    if receipt_matches or any(domain in sender_domain for domain in receipt_domains):
-        matched_keywords = receipt_matches
-        confidence = 0.93 if receipt_matches else 0.85
-        return "Receipts/Orders", confidence, matched_keywords
+    # STEP 3: Check Shopping/Orders
+    shopping_matches = [kw for kw in shopping_keywords if kw in combined_text]
+    if shopping_matches or any(domain in sender_domain for domain in shopping_domains):
+        matched_keywords = shopping_matches
+        confidence = 0.93 if shopping_matches else 0.85
+        return "Shopping/Orders", confidence, matched_keywords
     
-    # STEP 4: Check Work/Career (but not job promotional emails)
+    # STEP 4: Check Work/Career
     work_matches = [kw for kw in work_keywords if kw in combined_text]
     if work_matches:
-        # If it's from job sites with promotional language, it's promotional
-        if any(domain in sender_domain for domain in ['indeed', 'naukri', 'linkedin']) and \
-           any(kw in combined_text for kw in ['apply now', 'hot tip', 'register']):
-            return "Spam/Promotional", 0.89, promo_matches
         matched_keywords = work_matches
         return "Work/Career", 0.88, matched_keywords
     
-    # STEP 5: Check Social Updates
-    social_matches = [kw for kw in social_keywords if kw in combined_text]
-    if social_matches:
-        matched_keywords = social_matches
-        return "Social/Updates", 0.90, matched_keywords
+    # STEP 5: Check Personal/Other
+    personal_matches = [kw for kw in personal_keywords if kw in combined_text]
+    if personal_matches:
+        matched_keywords = personal_matches
+        return "Personal/Other", 0.85, matched_keywords
     
     return None, 0.0, []
 
 
 def classify_with_ml(subject, sender, body_snippet, features):
     """
-    Advanced ML-based classification using zero-shot learning.
+    Advanced ML-based classification using zero-shot learning with MNLI.
+    Reduced to 5 categories for better accuracy (Professor's recommendation).
     Returns (category, confidence, all_scores).
     """
     classifier = get_ml_classifier()
@@ -252,29 +544,25 @@ def classify_with_ml(subject, sender, body_snippet, features):
         return "Other", 0.5, {}
     
     # Construct optimized text for ML analysis
-    # Include sender domain as it's a strong signal
     sender_domain = features['sender_domain']
     text_to_analyze = f"From: {sender_domain}\nSubject: {subject}\nContent: {body_snippet[:300]}"
     
-    # Optimized candidate labels for better accuracy
+    # REDUCED TO 5 CATEGORIES - Better accuracy with fewer classes
+    # Using proper MNLI hypothesis format (full sentences, not just keywords)
     candidate_labels = [
-        "Banking, financial transactions, money, account statements",
-        "Shopping receipts, order confirmations, delivery tracking",
-        "Work, career, job opportunities, professional meetings",
-        "Social media notifications, friend updates, connections",
-        "Educational newsletters, courses, learning materials",
-        "Important personal emails, travel, security alerts",
-        "Marketing promotions, advertisements, sales offers"
+        "This email is about financial transactions, banking, or money matters",
+        "This email is about shopping, purchases, orders, or delivery tracking",
+        "This email is about work, career, jobs, or professional matters",
+        "This email is about promotional offers, marketing, advertisements, or sales",
+        "This email is about personal matters, newsletters, or general updates"
     ]
     
     label_mapping = {
-        "Banking, financial transactions, money, account statements": "Banking/Financial",
-        "Shopping receipts, order confirmations, delivery tracking": "Receipts/Orders",
-        "Work, career, job opportunities, professional meetings": "Work/Career",
-        "Social media notifications, friend updates, connections": "Social/Updates",
-        "Educational newsletters, courses, learning materials": "Newsletters",
-        "Important personal emails, travel, security alerts": "Personal/Important",
-        "Marketing promotions, advertisements, sales offers": "Spam/Promotional"
+        "This email is about financial transactions, banking, or money matters": "Banking/Financial",
+        "This email is about shopping, purchases, orders, or delivery tracking": "Shopping/Orders",
+        "This email is about work, career, jobs, or professional matters": "Work/Career",
+        "This email is about promotional offers, marketing, advertisements, or sales": "Promotional",
+        "This email is about personal matters, newsletters, or general updates": "Personal/Other"
     }
     
     try:
@@ -317,6 +605,7 @@ def ensemble_classification(keyword_result, ml_result, features):
     """
     Enterprise-level ensemble method combining keyword and ML predictions.
     Uses weighted voting and confidence calibration for optimal accuracy.
+    Increased confidence threshold to 0.7 for better accuracy (professor's recommendation).
     """
     keyword_category, keyword_conf, matched_kw = keyword_result
     ml_category, ml_conf, ml_scores = ml_result
@@ -332,31 +621,32 @@ def ensemble_classification(keyword_result, ml_result, features):
                 return ml_category, final_conf, ml_scores, 'ensemble'
         return keyword_category, keyword_conf, ml_scores, 'keyword'
     
-    # If keyword match is weak or no match, use ML
-    if ml_conf >= 0.35:
+    # INCREASED THRESHOLD: Only use ML if confidence >= 0.7 (was 0.35)
+    if ml_conf >= 0.7:
         # Boost ML confidence if features support the prediction
         boosted_conf = ml_conf
         
         # Feature-based confidence boosting
         if ml_category == "Banking/Financial" and features['has_currency']:
             boosted_conf = min(0.95, ml_conf + 0.10)
-        elif ml_category == "Receipts/Orders" and features['has_numbers']:
+        elif ml_category == "Shopping/Orders" and features['has_numbers']:
             boosted_conf = min(0.92, ml_conf + 0.08)
-        elif ml_category == "Spam/Promotional" and features['has_urgency']:
+        elif ml_category == "Promotional" and features['has_urgency']:
             boosted_conf = min(0.90, ml_conf + 0.10)
         elif ml_category == "Work/Career" and features['sender_domain'] in ['linkedin.com', 'naukri.com']:
             boosted_conf = min(0.90, ml_conf + 0.12)
         
         return ml_category, boosted_conf, ml_scores, 'ml'
     
-    # Low confidence - mark as Other
-    return "Other", max(keyword_conf, ml_conf), ml_scores, 'uncertain'
+    # Low confidence - mark as "Uncertain" instead of guessing
+    return "Personal/Other", max(keyword_conf, ml_conf), ml_scores, 'uncertain'
 
 
 def classify_email(subject, sender, body_snippet):
     """
     Enterprise-level email classification using ensemble ML approach.
-    Combines rule-based, ML, and sentiment analysis for high accuracy.
+    Uses TF-IDF + Logistic Regression as primary ML (professor's recommendation).
+    Fast, CPU-friendly, no large model downloads needed.
     """
     start_time = time.time()
     
@@ -366,11 +656,19 @@ def classify_email(subject, sender, body_snippet):
     # Step 2: Rule-based Classification (fast, high precision)
     keyword_result = classify_with_keywords(subject, sender, body_snippet, features)
     
-    # Step 3: ML Classification (slower, high recall)
-    ml_result = classify_with_ml(subject, sender, body_snippet, features)
+    # Step 3: ML Classification - TF-IDF Primary (CPU-friendly, fast)
+    ml_category, ml_conf, ml_scores = classify_with_tfidf(subject, sender, body_snippet)
+    ml_result = (ml_category, ml_conf, ml_scores)
+    ml_method = 'tfidf'
     
     # Step 4: Ensemble Decision
     category, confidence, all_scores, method = ensemble_classification(keyword_result, ml_result, features)
+    
+    # Update method to reflect which ML was used
+    if method == 'ml':
+        method = ml_method
+    elif method == 'ensemble':
+        method = f'ensemble-{ml_method}'
     
     # Step 5: Sentiment Analysis (parallel insight)
     sentiment, sentiment_score = analyze_sentiment(subject, body_snippet)
@@ -412,13 +710,17 @@ def get_or_create_label(service, label_name):
         return None
 
 def process_emails(service, max_results=50, query="in:inbox category:promotions OR is:unread"):
-    """Fetches emails based on a query, classifies them with metrics, and applies labels. Optimized with batch processing."""
+    """
+    Fetches emails based on a query, classifies them with metrics, and applies labels. 
+    Optimized with batch processing. Uses TF-IDF as primary classifier.
+    Rate-limited to avoid Gmail API quota issues.
+    """
     start_time = time.time()
     
     # Ensure our labels exist
     label_names = [
-        "Banking/Financial", "Spam/Promotional", "Personal/Important",
-        "Receipts/Orders", "Work/Career", "Social/Updates", "Newsletters"
+        "Banking/Financial", "Shopping/Orders", "Work/Career", 
+        "Promotional", "Personal/Other"
     ]
     label_ids = {}
     for name in label_names:
@@ -428,7 +730,13 @@ def process_emails(service, max_results=50, query="in:inbox category:promotions 
             
     try:
         print(f"\nScanning inbox (Query: '{query}', Max: {max_results})...")
-        results = service.users().messages().list(userId='me', q=query, maxResults=max_results).execute()
+        
+        # Rate-limited API call
+        @rate_limited_api_call
+        def list_messages():
+            return service.users().messages().list(userId='me', q=query, maxResults=max_results).execute()
+        
+        results = list_messages()
         messages = results.get('messages', [])
         
         if not messages:
@@ -440,30 +748,37 @@ def process_emails(service, max_results=50, query="in:inbox category:promotions 
                 'metrics': {}
             }
         
-        print(f"Found {len(messages)} messages. Fetching metadata in batch...")
+        print(f"Found {len(messages)} messages. Fetching metadata sequentially with rate limiting...")
         
-        # Batch fetch message metadata for speed
-        from googleapiclient.http import BatchHttpRequest
-        
+        # Sequential fetch with rate limiting to avoid concurrent request errors
         message_data = []
+        consecutive_errors = 0
         
-        def callback(request_id, response, exception):
-            if exception:
-                print(f"Error fetching message {request_id}: {exception}")
-            else:
-                message_data.append(response)
-        
-        # Create batch request for faster fetching
-        batch = service.new_batch_http_request(callback=callback)
-        for msg in messages:
-            batch.add(service.users().messages().get(
+        @rate_limited_api_call
+        def get_message(msg_id):
+            return service.users().messages().get(
                 userId='me', 
-                id=msg['id'], 
+                id=msg_id, 
                 format='metadata', 
                 metadataHeaders=['Subject', 'From', 'Date']
-            ))
+            ).execute()
         
-        batch.execute()
+        for i, msg in enumerate(messages):
+            try:
+                response = get_message(msg['id'])
+                message_data.append(response)
+                consecutive_errors = 0  # Reset error counter on success
+                if (i + 1) % 10 == 0:
+                    print(f"Fetched {i + 1}/{len(messages)} messages...")
+            except HttpError as error:
+                if error.resp.status == 429:
+                    consecutive_errors += 1
+                    print(f"Rate limit hit on message {i + 1}. Pausing for {consecutive_errors * 5} seconds...")
+                    time.sleep(consecutive_errors * 5)  # Increase pause with each consecutive error
+                else:
+                    print(f"Error fetching message {msg['id']}: {error}")
+                continue
+        
         print(f"Fetched {len(message_data)} messages. Starting classification...")
         
         processed_emails = []
@@ -500,18 +815,22 @@ def process_emails(service, max_results=50, query="in:inbox category:promotions 
             classification_metrics['method_distribution'][classification_result['method']] += 1
             total_confidence += confidence
             
-            # Apply labels to Gmail
+            # Apply labels to Gmail with rate limiting
+            @rate_limited_api_call
+            def modify_message(msg_id, body):
+                return service.users().messages().modify(userId='me', id=msg_id, body=body).execute()
+            
             if category in label_ids:
                 mod_body = {
                     'addLabelIds': [label_ids[category]],
                     'removeLabelIds': ['UNREAD']
                 }
-                service.users().messages().modify(userId='me', id=msg['id'], body=mod_body).execute()
+                modify_message(msg['id'], mod_body)
             else:
                 mod_body = {
                     'removeLabelIds': ['UNREAD']
                 }
-                service.users().messages().modify(userId='me', id=msg['id'], body=mod_body).execute()
+                modify_message(msg['id'], mod_body)
                 
             processed_emails.append({
                 "id": msg['id'],
@@ -561,17 +880,22 @@ def delete_messages(service, message_ids):
     Moves emails to trash (soft delete) or permanently deletes them.
     Note: Permanent deletion requires 'https://mail.google.com/' scope.
     With 'gmail.modify' scope, we can only trash emails.
+    Rate-limited to avoid API quota issues.
     """
     try:
         if not message_ids:
             return 0
         
         # Try permanent deletion first (requires full Gmail scope)
-        try:
-            service.users().messages().batchDelete(
+        @rate_limited_api_call
+        def batch_delete():
+            return service.users().messages().batchDelete(
                 userId='me',
                 body={'ids': message_ids}
             ).execute()
+        
+        try:
+            batch_delete()
             print(f"Permanently deleted {len(message_ids)} messages.")
             return len(message_ids)
         except HttpError as perm_error:
@@ -580,9 +904,14 @@ def delete_messages(service, message_ids):
             if 'insufficientPermissions' in str(perm_error):
                 print("Insufficient permissions for permanent deletion. Moving to trash instead...")
                 deleted_count = 0
+                
+                @rate_limited_api_call
+                def trash_message(msg_id):
+                    return service.users().messages().trash(userId='me', id=msg_id).execute()
+                
                 for msg_id in message_ids:
                     try:
-                        service.users().messages().trash(userId='me', id=msg_id).execute()
+                        trash_message(msg_id)
                         deleted_count += 1
                     except HttpError as trash_error:
                         print(f"Error trashing message {msg_id}: {trash_error}")
@@ -593,6 +922,40 @@ def delete_messages(service, message_ids):
                 
     except HttpError as error:
         print(f"An error occurred deleting messages: {error}")
+        return 0
+
+def archive_messages(service, message_ids):
+    """
+    Archives emails by removing the INBOX label.
+    This moves emails out of the inbox without deleting them.
+    Rate-limited to avoid API quota issues.
+    """
+    try:
+        if not message_ids:
+            return 0
+        
+        archived_count = 0
+        
+        @rate_limited_api_call
+        def modify_message(msg_id):
+            return service.users().messages().modify(
+                userId='me',
+                id=msg_id,
+                body={'removeLabelIds': ['INBOX']}
+            ).execute()
+        
+        for msg_id in message_ids:
+            try:
+                modify_message(msg_id)
+                archived_count += 1
+            except HttpError as error:
+                print(f"Error archiving message {msg_id}: {error}")
+        
+        print(f"Archived {archived_count} messages.")
+        return archived_count
+                
+    except HttpError as error:
+        print(f"An error occurred archiving messages: {error}")
         return 0
 
 def clean_inbox():

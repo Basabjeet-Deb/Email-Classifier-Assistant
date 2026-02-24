@@ -9,6 +9,7 @@ numpy>=1.24.0,<2.0.0
 transformers==4.37.2
 torch==2.2.0
 sentencepiece==0.1.99
+scikit-learn==1.4.0
 
 # Web server dependencies
 fastapi==0.109.2

@@ -71,13 +71,17 @@ def auth_new_account():
 
 @app.post("/api/scan")
 def scan_emails(req: ScanRequest):
-    """Triggers the inbox scanner for a specific account with enhanced metrics."""
+    """Triggers the inbox scanner. Uses TF-IDF + LogReg as primary classifier."""
     service = email_core.authenticate_gmail(req.account_id)
     if not service:
         raise HTTPException(status_code=401, detail=f"Failed to authenticate with Gmail for {req.account_id}.")
     
     try:
-        result = email_core.process_emails(service, max_results=req.max_results, query=req.query)
+        result = email_core.process_emails(
+            service, 
+            max_results=req.max_results, 
+            query=req.query
+        )
         
         # Store classifications in database for analytics
         db.store_batch_classifications(req.account_id, result['emails'])
@@ -108,6 +112,22 @@ def delete_emails(request: DeleteRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/archive")
+def archive_emails(request: DeleteRequest):
+    """Archives a list of emails for a specific account by removing inbox label."""
+    service = email_core.authenticate_gmail(request.account_id)
+    if not service:
+        raise HTTPException(status_code=401, detail=f"Failed to authenticate with Gmail for {request.account_id}.")
+    
+    if not request.message_ids:
+        return {"status": "success", "archived_count": 0, "message": "No IDs provided."}
+
+    try:
+        count = email_core.archive_messages(service, request.message_ids)
+        return {"status": "success", "archived_count": count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/analytics/{account_id}")
 def get_analytics(account_id: str, days: int = 30):
     """Get analytics data for the specified account."""
@@ -119,6 +139,22 @@ def get_analytics(account_id: str, days: int = 30):
             "analytics": analytics,
             "insights": insights
         }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/retrain-tfidf")
+def retrain_tfidf():
+    """Retrain the TF-IDF classifier using historical data from database."""
+    try:
+        success = email_core.retrain_tfidf_from_database()
+        if success:
+            return {
+                "status": "success",
+                "message": "TF-IDF classifier retrained successfully using historical data"
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to retrain classifier")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
