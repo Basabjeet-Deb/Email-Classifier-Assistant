@@ -19,21 +19,18 @@ ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 allowed_origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "https://email-classifier-frontend-5431.onrender.com",
+    "https://email-classifier-api-qadx.onrender.com",
     FRONTEND_URL,
 ]
 
-# Add production URLs if in production
+# In production, allow all origins for simplicity
 if ENVIRONMENT == "production":
-    allowed_origins.extend([
-        "https://*.onrender.com",
-        "https://*.vercel.app",
-        "https://*.railway.app",
-        "https://*.netlify.app"
-    ])
+    allowed_origins = ["*"]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins if ENVIRONMENT == "development" else ["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
