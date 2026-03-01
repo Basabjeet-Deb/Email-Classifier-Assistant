@@ -1,10 +1,14 @@
 import axios from 'axios';
 
+// Use environment variable for API URL, fallback to relative path for development
+const API_URL = import.meta.env.VITE_API_URL || '';
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: API_URL ? `${API_URL}/api` : '/api',
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: false,
 });
 
 export const emailAPI = {

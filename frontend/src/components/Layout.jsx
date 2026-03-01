@@ -99,14 +99,14 @@ export const Layout = ({ children, activeView, setActiveView, status, activeAcco
           topColor="#a855f7"
           bottomColor="#ec4899"
           intensity={0.65}
-          rotationSpeed={0.12}
+          rotationSpeed={0.08}
           glowAmount={0.005}
           pillarWidth={2.5}
           pillarHeight={0.22}
           noiseIntensity={0.15}
           mixBlendMode="screen"
           pillarRotation={-20}
-          quality="high"
+          quality="medium"
         />
       </div>
       <div className="app-background-pillar app-pillar-right">
@@ -114,14 +114,14 @@ export const Layout = ({ children, activeView, setActiveView, status, activeAcco
           topColor="#3b82f6"
           bottomColor="#06b6d4"
           intensity={0.6}
-          rotationSpeed={0.15}
+          rotationSpeed={0.10}
           glowAmount={0.005}
           pillarWidth={2.3}
           pillarHeight={0.25}
           noiseIntensity={0.18}
           mixBlendMode="screen"
           pillarRotation={20}
-          quality="high"
+          quality="medium"
         />
       </div>
 

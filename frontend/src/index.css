@@ -502,3 +502,38 @@
   transform: translateY(-4px);
   box-shadow: 0 12px 40px rgba(168, 85, 247, 0.25), 0 0 60px rgba(168, 85, 247, 0.15);
 }
+
+/* Performance Optimizations */
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* GPU Acceleration for animations */
+.ethereal-card,
+.glass,
+.app-background-pillar {
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* Optimize transitions */
+button, a, .transition-all {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  
+  .app-background-pillar {
+    opacity: 0.2;
+  }
+}

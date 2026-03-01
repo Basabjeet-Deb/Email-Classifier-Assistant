@@ -1,0 +1,64 @@
+📋 DEPLOYMENT CHECKLIST - Email Classifier Assistant
+=================================================
+
+BEFORE DEPLOYMENT:
+[ ] Code is working locally
+[ ] All changes committed to Git
+[ ] credentials.json is NOT in Git (check .gitignore)
+[ ] GitHub repository created and pushed
+
+DEPLOYMENT STEPS:
+[ ] 1. Sign up for Render.com (free)
+[ ] 2. Deploy Backend:
+    - New Web Service
+    - Connect GitHub repo
+    - Build: pip install -r requirements.txt
+    - Start: uvicorn server:app --host 0.0.0.0 --port $PORT
+    - Environment: PYTHON_VERSION=3.11.0, ENVIRONMENT=production
+[ ] 3. Copy backend URL: https://your-app.onrender.com
+[ ] 4. Deploy Frontend:
+    - New Static Site
+    - Build: cd frontend && npm install && npm run build
+    - Publish: frontend/dist
+    - Environment: VITE_API_URL=<your-backend-url>
+[ ] 5. Update Google OAuth:
+    - Go to console.cloud.google.com
+    - APIs & Services → Credentials
+    - Add redirect URIs (both backend and frontend URLs)
+    - Save changes
+
+TESTING:
+[ ] Visit frontend URL
+[ ] Click "Get Started"
+[ ] Authenticate with Gmail (OAuth should work)
+[ ] Scan inbox (first time will be slow ~30-60s)
+[ ] Verify emails are classified correctly
+[ ] Check analytics page works
+
+OPTIONAL (Keep app awake):
+[ ] Sign up for UptimeRobot.com (free)
+[ ] Add monitor for: https://your-backend.onrender.com/api/status
+[ ] Set interval: 14 minutes
+
+DONE! 🎉
+Your app is now live at: https://your-frontend.onrender.com
+
+SHARE YOUR URL:
+_____________________________________________
+
+NOTES:
+- First load after sleep: 30-60 seconds (normal)
+- Subsequent loads: Fast
+- Free tier: 750 hours/month (enough for 24/7)
+- ML models load on first classification (slow)
+- Cache makes subsequent classifications fast
+
+TROUBLESHOOTING:
+- App won't start? Check Render logs
+- OAuth fails? Verify redirect URIs
+- Slow? First request loads models (normal)
+
+HELP:
+- Quick guide: QUICK_DEPLOY.md
+- Full guide: DEPLOYMENT.md
+- GitHub issues: Open an issue for help

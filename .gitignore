@@ -3,6 +3,14 @@ credentials.json
 token*.json
 *.json.secret
 
+# Environment variables
+.env
+.env.local
+.env.production
+frontend/.env
+frontend/.env.local
+frontend/.env.production
+
 # Database
 email_analytics.db
 *.db
@@ -53,3 +61,8 @@ tfidf_model.pkl
 
 # Cleanup files
 CLEANUP_SUMMARY.txt
+
+# Deployment
+.vercel
+.railway
+.render

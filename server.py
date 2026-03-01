@@ -11,10 +11,29 @@ import database as db
 
 app = FastAPI(title="Email Classifier Assistant API")
 
-# Enable CORS for React dev server
+# Get environment variables
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+
+# Enable CORS for frontend
+allowed_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    FRONTEND_URL,
+]
+
+# Add production URLs if in production
+if ENVIRONMENT == "production":
+    allowed_origins.extend([
+        "https://*.onrender.com",
+        "https://*.vercel.app",
+        "https://*.railway.app",
+        "https://*.netlify.app"
+    ])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=allowed_origins if ENVIRONMENT == "development" else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -173,4 +192,6 @@ def retrain_tfidf():
 
 if __name__ == "__main__":
     print("Starting FastAPI Backend Server...")
-    uvicorn.run("server:app", host="127.0.0.1", port=8000, reload=True)
+    port = int(os.getenv("PORT", 8000))
+    host = "0.0.0.0" if ENVIRONMENT == "production" else "127.0.0.1"
+    uvicorn.run("server:app", host=host, port=port, reload=(ENVIRONMENT == "development"))
