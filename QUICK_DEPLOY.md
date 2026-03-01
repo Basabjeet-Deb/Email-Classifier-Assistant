@@ -27,6 +27,21 @@ git push origin main
 
 **Note:** First deployment takes 5-10 minutes. This is normal!
 
+### 2.5. Add Google Credentials (2 minutes)
+
+**After backend is deployed:**
+
+1. Go to your service → **"Environment"** tab
+2. Scroll to **"Secret Files"** section
+3. Click **"Add Secret File"**
+4. Configure:
+   - **Filename**: `credentials.json`
+   - **Contents**: Paste your entire `credentials.json` file
+5. Click **"Save Changes"**
+6. Service will auto-redeploy
+
+**Don't have credentials.json?** See [CREDENTIALS_SETUP.md](CREDENTIALS_SETUP.md) for details.
+
 ### 3. Deploy Frontend (3 minutes)
 
 1. Click **"New +"** → **"Static Site"**

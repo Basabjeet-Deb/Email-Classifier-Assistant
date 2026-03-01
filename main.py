@@ -396,6 +396,20 @@ def authenticate_gmail(account_id="default"):
     token_path = os.path.join(BASE_DIR, f'token_{account_id}.json')
     creds_path = os.path.join(BASE_DIR, 'credentials.json')
     
+    # Check if credentials.json exists, if not try environment variable
+    if not os.path.exists(creds_path):
+        # Try to get credentials from environment variable
+        creds_json = os.getenv('GOOGLE_CREDENTIALS_JSON')
+        if creds_json:
+            import json
+            # Write credentials to file temporarily
+            with open(creds_path, 'w') as f:
+                f.write(creds_json)
+            print("Using credentials from environment variable")
+        else:
+            print("ERROR: credentials.json not found and GOOGLE_CREDENTIALS_JSON not set")
+            return None
+    
     # The file token_{account_id}.json stores the user's access and refresh tokens
     if os.path.exists(token_path):
         creds = Credentials.from_authorized_user_file(token_path, SCOPES)
