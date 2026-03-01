@@ -2,6 +2,7 @@ import os
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
 
@@ -9,6 +10,15 @@ import main as email_core
 import database as db
 
 app = FastAPI(title="Email Classifier Assistant API")
+
+# Enable CORS for React dev server
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Setup static directory for our HTML/CSS/JS interface
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -94,6 +104,9 @@ def scan_emails(req: ScanRequest):
             "metrics": result['metrics']
         }
     except Exception as e:
+        import traceback
+        print(f"ERROR in scan_emails: {str(e)}")
+        print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/delete")

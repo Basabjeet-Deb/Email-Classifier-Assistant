@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import toast from 'react-hot-toast';
+import { LandingPage } from './components/LandingPage';
 import { Layout } from './components/Layout';
 import { StatsCards } from './components/StatsCards';
 import { EmailTableModern } from './components/EmailTableModern';
@@ -14,6 +15,8 @@ import { Rocket, Trash2, RefreshCw } from 'lucide-react';
 const queryClient = new QueryClient();
 
 function AppContent() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [activeView, setActiveView] = useState('inbox');
   const [status, setStatus] = useState('Checking...');
   const [activeAccount, setActiveAccount] = useState('default');
@@ -33,17 +36,35 @@ function AppContent() {
       const response = await emailAPI.getStatus();
       if (response.data.status === 'connected') {
         setStatus('Connected');
+        setIsAuthenticated(true);
         if (response.data.accounts && response.data.accounts.length > 0) {
           setAvailableAccounts(response.data.accounts);
           setActiveAccount(response.data.accounts[0]);
         }
       } else {
         setStatus('Disconnected');
+        setIsAuthenticated(false);
         setAvailableAccounts([]);
       }
     } catch (error) {
       setStatus('Error');
+      setIsAuthenticated(false);
       setAvailableAccounts([]);
+    } finally {
+      setIsCheckingAuth(false);
+    }
+  };
+
+  const handleLogin = async () => {
+    try {
+      await emailAPI.authenticate();
+      toast.success('Authentication started. Check your browser.');
+      // Wait and check status
+      setTimeout(async () => {
+        await checkStatus();
+      }, 3000);
+    } catch (error) {
+      toast.error('Failed to authenticate');
     }
   };
 
@@ -57,7 +78,6 @@ function AppContent() {
     try {
       await emailAPI.authenticate();
       toast.success('Account authentication started. Check your browser.');
-      // Refresh status after authentication
       setTimeout(() => checkStatus(), 2000);
     } catch (error) {
       toast.error('Failed to add account');
@@ -66,22 +86,71 @@ function AppContent() {
 
   const handleScan = async () => {
     setSelectedIds([]);
+
+    const toastId = toast.loading(
+      <div className="flex flex-col gap-1">
+        <span className="font-semibold">Scanning Inbox...</span>
+        <span className="text-sm text-neutral-400">Fetching and classifying emails</span>
+      </div>
+    );
+
     try {
       await scanInbox(activeAccount, scanLimit, 'in:inbox category:promotions OR is:unread');
+
+      toast.success(
+        <div className="flex flex-col gap-1">
+          <span className="font-semibold">Scan Complete!</span>
+          <span className="text-sm text-neutral-400">Emails classified successfully</span>
+        </div>,
+        { id: toastId, duration: 3000 }
+      );
     } catch (error) {
-      if (error.response?.status === 429) {
-        toast.error('Rate limit reached. Please wait a moment and try again.', {
-          duration: 5000
-        });
-      }
+      toast.error(
+        error.response?.status === 429
+          ? 'Rate limit reached. Please wait and try again.'
+          : 'Scan failed. Please try again.',
+        { id: toastId, duration: 4000 }
+      );
     }
   };
 
   const handleDelete = async () => {
     if (selectedIds.length === 0) return;
     if (!confirm(`Delete ${selectedIds.length} email(s)?`)) return;
-    await deleteEmails(activeAccount, selectedIds);
+
+    const count = selectedIds.length;
+    const idsToDelete = [...selectedIds];
+
+    const toastId = toast.loading(
+      <div className="flex flex-col gap-1">
+        <span className="font-semibold">Deleting {count} email{count !== 1 ? 's' : ''}...</span>
+        <span className="text-sm text-neutral-400">Removing from inbox</span>
+      </div>
+    );
+
     setSelectedIds([]);
+
+    try {
+      await deleteEmails(activeAccount, idsToDelete, toastId);
+
+      toast.success(
+        <div className="flex flex-col gap-1">
+          <span className="font-semibold">Deleted Successfully!</span>
+          <span className="text-sm text-neutral-400">{count} email{count !== 1 ? 's' : ''} removed</span>
+        </div>,
+        { id: toastId, duration: 3000 }
+      );
+    } catch (error) {
+      setSelectedIds(idsToDelete);
+
+      toast.error(
+        <div className="flex flex-col gap-1">
+          <span className="font-semibold">Delete Failed</span>
+          <span className="text-sm text-neutral-400">Please try again</span>
+        </div>,
+        { id: toastId, duration: 4000 }
+      );
+    }
   };
 
   const handleArchive = async (emailId) => {
@@ -91,7 +160,6 @@ function AppContent() {
         message_ids: [emailId]
       });
       toast.success('Email archived successfully!');
-      // Remove from local state
       setSelectedIds(prev => prev.filter(id => id !== emailId));
     } catch (error) {
       console.error('Failed to archive email:', error);
@@ -106,10 +174,10 @@ function AppContent() {
   };
 
   const handleToggleSelectAll = () => {
-    const selectableEmails = emails.filter(e => 
+    const selectableEmails = emails.filter(e =>
       !['Banking/Financial', 'Work/Career', 'Shopping/Orders'].some(c => e.category.includes(c))
     );
-    
+
     if (selectedIds.length === selectableEmails.length) {
       setSelectedIds([]);
     } else {
@@ -118,17 +186,32 @@ function AppContent() {
   };
 
   const totalScanned = emails.length;
-  const avgConfidence = metrics?.avg_confidence 
-    ? Math.round(metrics.avg_confidence * 100) 
+  const avgConfidence = metrics?.avg_confidence
+    ? Math.round(metrics.avg_confidence * 100)
     : 0;
 
-  // Filter emails based on search query
   const filteredEmails = searchQuery
     ? emails.filter(email =>
-        email.subject?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        email.sender?.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+      email.subject?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      email.sender?.toLowerCase().includes(searchQuery.toLowerCase())
+    )
     : emails;
+
+  // Show landing page if not authenticated
+  if (isCheckingAuth) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-neutral-900">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-neutral-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LandingPage onLogin={handleLogin} />;
+  }
 
   return (
     <Layout
@@ -143,17 +226,17 @@ function AppContent() {
       onAddAccount={handleAddAccount}
     >
       {activeView === 'inbox' ? (
-        <div className="space-y-6">
+        <div className="space-y-5">
           {/* Rate Limit Info Banner */}
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
+          <div className="glass rounded-lg p-3.5 flex items-start gap-3 border-l-2 border-amber-500/40">
             <div className="flex-shrink-0 mt-0.5">
-              <svg className="w-5 h-5 text-amber-600" fill="currentColor" viewBox="0 0 20 20">
+              <svg className="w-4 h-4 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
               </svg>
             </div>
             <div className="flex-1">
-              <h4 className="text-sm font-semibold text-amber-900 mb-1">Gmail API Rate Limits</h4>
-              <p className="text-sm text-amber-700">
+              <h4 className="text-[12px] font-semibold text-amber-300 mb-0.5">Gmail API Rate Limits</h4>
+              <p className="text-[11px] text-neutral-400">
                 Start with 10 emails to avoid rate limits. Wait 30-60 seconds between scans if you hit limits.
               </p>
             </div>
@@ -162,20 +245,20 @@ function AppContent() {
           {/* Page Header */}
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-neutral-900">Inbox Classification</h1>
-              <p className="text-neutral-500 mt-1">
-                {searchQuery 
+              <h1 className="text-xl font-bold text-neutral-100">Inbox Classification</h1>
+              <p className="text-neutral-500 mt-0.5 text-sm">
+                {searchQuery
                   ? `Found ${filteredEmails.length} result${filteredEmails.length !== 1 ? 's' : ''} for "${searchQuery}"`
                   : 'AI-powered email organization'
                 }
               </p>
             </div>
-            
-            <div className="flex items-center gap-3">
+
+            <div className="flex items-center gap-2.5">
               <select
                 value={scanLimit}
                 onChange={(e) => setScanLimit(Number(e.target.value))}
-                className="px-4 py-2 bg-white border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="px-3 py-2 bg-dark-800 border border-white/[0.06] rounded-lg text-[12px] text-neutral-300 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
               >
                 <option value={10}>10 emails (Recommended)</option>
                 <option value={25}>25 emails</option>
@@ -185,16 +268,16 @@ function AppContent() {
               <button
                 onClick={handleScan}
                 disabled={loading}
-                className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-lg hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-5 py-2 bg-primary-600/80 text-white rounded-lg hover:bg-primary-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-[13px] font-medium"
               >
                 {loading ? (
                   <>
-                    <RefreshCw size={20} className="animate-spin" />
+                    <RefreshCw size={16} className="animate-spin" />
                     <span>Analyzing...</span>
                   </>
                 ) : (
                   <>
-                    <Rocket size={20} />
+                    <Rocket size={16} />
                     <span>Analyze Inbox</span>
                   </>
                 )}
@@ -203,9 +286,9 @@ function AppContent() {
               {selectedIds.length > 0 && (
                 <button
                   onClick={handleDelete}
-                  className="flex items-center gap-2 px-6 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-all"
+                  className="flex items-center gap-2 px-4 py-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/15 transition-all text-[13px] font-medium"
                 >
-                  <Trash2 size={20} />
+                  <Trash2 size={16} />
                   <span>Delete ({selectedIds.length})</span>
                 </button>
               )}
@@ -243,14 +326,21 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AppContent />
-      <Toaster 
+      <Toaster
         position="top-right"
+        containerStyle={{
+          top: 80,
+          right: 20,
+          zIndex: 9999,
+        }}
         toastOptions={{
           style: {
-            background: '#fff',
-            color: '#171717',
-            border: '1px solid #e5e5e5',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
+            background: '#1f1f27',
+            color: '#e0ddd6',
+            border: '1px solid rgba(255, 255, 255, 0.06)',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
+            fontSize: '13px',
+            zIndex: 9999,
           },
         }}
       />

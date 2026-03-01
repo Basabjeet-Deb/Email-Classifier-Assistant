@@ -1,0 +1,183 @@
+/* CardNav — Sidebar Integration */
+
+.cardnav {
+    width: 100%;
+}
+
+/* Toggle button */
+.cardnav-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    color: #cbc6bc;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+}
+
+.cardnav-toggle:hover {
+    background: rgba(255, 255, 255, 0.07);
+    color: #e0ddd6;
+}
+
+.cardnav-toggle.open {
+    background: rgba(212, 131, 46, 0.08);
+    border-color: rgba(212, 131, 46, 0.15);
+    color: #d4832e;
+}
+
+.cardnav-toggle-label {
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 11px;
+}
+
+/* Hamburger */
+.cardnav-hamburger {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 18px;
+}
+
+.cardnav-line {
+    width: 100%;
+    height: 1.5px;
+    background: currentColor;
+    transition: transform 0.25s ease, opacity 0.2s ease;
+    transform-origin: center;
+}
+
+.cardnav-toggle.open .cardnav-line:first-child {
+    transform: translateY(2.75px) rotate(45deg);
+}
+
+.cardnav-toggle.open .cardnav-line:last-child {
+    transform: translateY(-2.75px) rotate(-45deg);
+}
+
+/* Cards container */
+.cardnav-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+    overflow: hidden;
+}
+
+/* Individual card */
+.cardnav-card {
+    border-radius: 10px;
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.cardnav-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg,
+            rgba(255, 255, 255, 0.04) 0%,
+            rgba(255, 255, 255, 0) 60%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.cardnav-card:hover::before {
+    opacity: 1;
+}
+
+.cardnav-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.cardnav-card.active {
+    box-shadow: 0 0 0 1px rgba(212, 131, 46, 0.25), 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+/* Card header */
+.cardnav-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.cardnav-card-icon {
+    font-size: 16px;
+    line-height: 1;
+}
+
+.cardnav-card-label {
+    font-weight: 600;
+    font-size: 14px;
+    color: #f0eeea;
+    letter-spacing: -0.01em;
+}
+
+.cardnav-active-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #d4832e;
+    margin-left: auto;
+    box-shadow: 0 0 8px rgba(212, 131, 46, 0.5);
+}
+
+/* Card description */
+.cardnav-card-desc {
+    font-size: 12px;
+    color: rgba(240, 238, 234, 0.5);
+    line-height: 1.4;
+    margin-bottom: 8px;
+}
+
+/* Card links */
+.cardnav-card-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: auto;
+}
+
+.cardnav-card-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 11px;
+    color: rgba(240, 238, 234, 0.45);
+    transition: color 0.2s ease;
+    cursor: pointer;
+}
+
+.cardnav-card-link:hover {
+    color: rgba(240, 238, 234, 0.8);
+}
+
+.cardnav-link-icon {
+    width: 12px;
+    height: 12px;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+    .cardnav-card {
+        padding: 12px 14px;
+    }
+
+    .cardnav-card-label {
+        font-size: 13px;
+    }
+}

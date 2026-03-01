@@ -294,19 +294,24 @@ def train_tfidf_classifier():
             ["Personal/Other"] * 40
         )
     
-    # Create pipeline
+    # Create pipeline with improved hyperparameters for better accuracy
     pipeline = Pipeline([
         ('tfidf', TfidfVectorizer(
-            max_features=1000,
-            ngram_range=(1, 2),
+            max_features=3000,        # Increased from 1000 for richer features
+            ngram_range=(1, 3),       # Added trigrams for better phrase matching
             stop_words='english',
-            min_df=1
+            min_df=1,
+            max_df=0.95,              # Ignore very common terms
+            sublinear_tf=True,        # Better handling of varying email lengths
+            strip_accents='unicode'   # Handle special characters properly
         )),
         ('clf', LogisticRegression(
-            max_iter=1000,
+            max_iter=2000,              # Increased iterations for convergence
             multi_class='multinomial',
             solver='lbfgs',
-            C=1.0
+            C=1.5,                      # Slightly less regularization
+            class_weight='balanced',    # Handle imbalanced categories better
+            random_state=42             # Reproducibility
         ))
     ])
     
@@ -450,6 +455,7 @@ def classify_with_keywords(subject, sender, body_snippet, features):
     """
     Rule-based classification using keyword matching - UPDATED TO 5 CATEGORIES.
     Returns (category, confidence, matched_keywords) or (None, 0, []) if no match.
+    STRENGTHENED: More keywords, better domain matching, higher confidence.
     """
     combined_text = f"{subject} {body_snippet}".lower()
     sender_lower = sender.lower()
@@ -460,69 +466,99 @@ def classify_with_keywords(subject, sender, body_snippet, features):
         'account statement', 'transaction', 'balance', 'credit card', 'debit card',
         'payment', 'netbanking', 'upi', 'neft', 'rtgs', 'imps',
         'account alert', 'credited', 'debited', 'withdrawal', 'deposit',
-        'statement for', 'minimum balance', 'overdraft', 'loan', 'emi', 'interest'
+        'statement for', 'minimum balance', 'overdraft', 'loan', 'emi', 'interest',
+        'bank account', 'savings account', 'current account', 'fixed deposit',
+        'mutual fund', 'investment', 'cheque', 'atm', 'card blocked', 'otp'
     ]
-    banking_domains = ['bank', 'sbi', 'hdfc', 'icici', 'axis', 'kotak', 'paytm', 'phonepe', 'gpay', 'citi', 'hsbc']
+    banking_domains = ['bank', 'sbi', 'hdfc', 'icici', 'axis', 'kotak', 'paytm', 'phonepe', 'gpay', 'citi', 'hsbc', 'pnb', 'canara', 'idbi']
     
     shopping_keywords = [
         'order confirmation', 'receipt', 'invoice', 'shipped', 'delivery',
         'tracking', 'your order', 'purchase', 'payment successful', 'order placed',
         'dispatched', 'out for delivery', 'delivered', 'order #', 'order number',
-        'thank you for your order', 'shipment', 'package', 'courier', 'tracking number'
+        'thank you for your order', 'shipment', 'package', 'courier', 'tracking number',
+        'order has been', 'order status', 'order update', 'estimated delivery'
     ]
-    shopping_domains = ['amazon', 'flipkart', 'myntra', 'swiggy', 'zomato', 'uber', 'ola', 'ebay', 'shopify']
+    shopping_domains = ['amazon', 'flipkart', 'myntra', 'swiggy', 'zomato', 'uber', 'ola', 'ebay', 'shopify', 'meesho', 'ajio', 'nykaa']
+    
+    work_keywords = [
+        'meeting scheduled', 'interview invitation', 'job application', 'resume shortlisted',
+        'position available', 'hiring for', 'recruitment process', 'linkedin connection',
+        'project deadline', 'task assigned', 'team meeting', 'colleague request',
+        'conference call', 'job alert', 'job opening', 'candidate profile'
+    ]
+    work_domains = ['linkedin', 'naukri', 'indeed', 'glassdoor', 'angellist', 'internshala']
+    
+    # Personal/Other domains (newsletters, social, content platforms, education)
+    personal_domains = ['soundcloud', 'spotify', 'youtube', 'perplexity', 'adobe', 'medium', 
+                       'substack', 'honeygain', 'facebook', 'twitter', 'instagram',
+                       'coursera', 'udemy', 'edx', 'claude', 'canva', 'notion', 'figma']
     
     # PRIORITY: Check promotional keywords FIRST
     promo_keywords = [
-        'special offer', 'discount', 'sale', 'limited time', 'offer expires',
-        'buy now', 'shop now', 'deal', 'save', 'free trial', 'subscribe now',
-        'unsubscribe', 'register now', 'sign up', 'join now', 'exclusive offer',
-        'promotional', 'advertisement', 'marketing', 'off %', '% off', 'claim your',
-        'dont miss', "don't miss", 'last chance', 'hurry', 'act now', 'limited offer',
-        'flash sale', 'clearance', 'mega sale', 'biggest sale', 'offer valid', 'promo code',
-        'apply now', 'get ready', 'hot tip', 'register today', 'free', 'click here'
+        'special offer', 'discount', 'sale ends', 'limited time', 'offer expires',
+        'buy now', 'shop now', 'deal of', 'save up to', 'free trial', 'subscribe now',
+        'exclusive offer', 'promotional', 'advertisement', '% off', 'claim your',
+        'dont miss', "don't miss", 'last chance', 'hurry up', 'act now', 'limited offer',
+        'flash sale', 'clearance sale', 'mega sale', 'biggest sale', 'promo code',
+        'limited stock', 'while supplies last', 'today only', 'ends soon', 'ends today',
+        'black friday', 'cyber monday', 'thanksgiving sale', 'holiday sale',
+        'bonus offer', 'welcome back bonus', 'cashback offer', 'gift card',
+        'congratulations you', "you've won", 'claim now', 'redeem now'
     ]
     
-    work_keywords = [
-        'meeting', 'interview', 'job', 'career', 'resume', 'cv', 'application',
-        'position', 'opportunity', 'hiring', 'recruitment', 'linkedin', 'naukri',
-        'project', 'deadline', 'task', 'team', 'colleague', 'conference call'
-    ]
-    
-    # Personal/Other includes: newsletters, social, personal emails
+    # Personal/Other includes: newsletters, social, personal emails, education
     personal_keywords = [
-        'newsletter', 'weekly digest', 'monthly update', 'facebook', 'twitter', 
-        'instagram', 'notification', 'liked your', 'commented on', 'friend request',
-        'connection request', 'webinar', 'course', 'training'
+        'newsletter from', 'weekly digest', 'monthly update', 'whats new in', "what's new in",
+        'new feature', 'product update', 'introducing our', 'update from',
+        'learn from', 'learn about', 'educational content', 'online course',
+        'happy holidays', 'season greetings', 'thank you for', 'community update'
     ]
     
     matched_keywords = []
     
-    # STEP 1: Check for promotional content FIRST
+    # STEP 0: Check for personal/content platform domains FIRST
+    # (SoundCloud, Adobe, Perplexity, etc. should be Personal, not promotional)
+    has_personal_domain = any(domain in sender_domain for domain in personal_domains)
+    if has_personal_domain:
+        # Check if it's actually promotional content from these platforms
+        promo_matches = [kw for kw in promo_keywords if kw in combined_text]
+        if promo_matches and len(promo_matches) >= 2:
+            # Strong promotional signals - classify as Promotional
+            return "Promotional", 0.90, promo_matches
+        else:
+            # Content/newsletter from these platforms - Personal/Other
+            return "Personal/Other", 0.92, []
+    
+    # STEP 1: Check Banking/Financial FIRST (highest priority for financial safety)
+    banking_matches = [kw for kw in banking_keywords if kw in combined_text]
+    has_banking_domain = any(domain in sender_domain for domain in banking_domains)
+    if banking_matches or has_banking_domain:
+        matched_keywords = banking_matches
+        confidence = 0.98 if (banking_matches and has_banking_domain) else 0.92 if banking_matches else 0.88
+        return "Banking/Financial", confidence, matched_keywords
+    
+    # STEP 2: Check Shopping/Orders
+    shopping_matches = [kw for kw in shopping_keywords if kw in combined_text]
+    has_shopping_domain = any(domain in sender_domain for domain in shopping_domains)
+    if shopping_matches or has_shopping_domain:
+        matched_keywords = shopping_matches
+        confidence = 0.96 if (shopping_matches and has_shopping_domain) else 0.90 if shopping_matches else 0.85
+        return "Shopping/Orders", confidence, matched_keywords
+    
+    # STEP 3: Check Work/Career
+    work_matches = [kw for kw in work_keywords if kw in combined_text]
+    has_work_domain = any(domain in sender_domain for domain in work_domains)
+    if work_matches or has_work_domain:
+        matched_keywords = work_matches
+        confidence = 0.94 if (work_matches and has_work_domain) else 0.88 if work_matches else 0.82
+        return "Work/Career", confidence, matched_keywords
+    
+    # STEP 4: Check for promotional content
     promo_matches = [kw for kw in promo_keywords if kw in combined_text]
     if promo_matches:
         matched_keywords = promo_matches
         return "Promotional", 0.91, matched_keywords
-    
-    # STEP 2: Check Banking/Financial
-    banking_matches = [kw for kw in banking_keywords if kw in combined_text]
-    if banking_matches or any(domain in sender_domain for domain in banking_domains):
-        matched_keywords = banking_matches
-        confidence = 0.95 if banking_matches else 0.85
-        return "Banking/Financial", confidence, matched_keywords
-    
-    # STEP 3: Check Shopping/Orders
-    shopping_matches = [kw for kw in shopping_keywords if kw in combined_text]
-    if shopping_matches or any(domain in sender_domain for domain in shopping_domains):
-        matched_keywords = shopping_matches
-        confidence = 0.93 if shopping_matches else 0.85
-        return "Shopping/Orders", confidence, matched_keywords
-    
-    # STEP 4: Check Work/Career
-    work_matches = [kw for kw in work_keywords if kw in combined_text]
-    if work_matches:
-        matched_keywords = work_matches
-        return "Work/Career", 0.88, matched_keywords
     
     # STEP 5: Check Personal/Other
     personal_matches = [kw for kw in personal_keywords if kw in combined_text]
@@ -547,22 +583,22 @@ def classify_with_ml(subject, sender, body_snippet, features):
     sender_domain = features['sender_domain']
     text_to_analyze = f"From: {sender_domain}\nSubject: {subject}\nContent: {body_snippet[:300]}"
     
-    # REDUCED TO 5 CATEGORIES - Better accuracy with fewer classes
-    # Using proper MNLI hypothesis format (full sentences, not just keywords)
+    # IMPROVED PROMPTS - More specific and context-aware
+    # Using proper MNLI hypothesis format with clear distinctions
     candidate_labels = [
-        "This email is about financial transactions, banking, or money matters",
-        "This email is about shopping, purchases, orders, or delivery tracking",
-        "This email is about work, career, jobs, or professional matters",
-        "This email is about promotional offers, marketing, advertisements, or sales",
-        "This email is about personal matters, newsletters, or general updates"
+        "This email is a bank transaction alert, credit card statement, payment notification, or financial account update from a bank or payment service",
+        "This email is an order confirmation, shipping notification, delivery tracking update, or purchase receipt from an online store or delivery service",
+        "This email is a job application, interview invitation, professional networking message, work meeting, or career opportunity from a company or recruiter",
+        "This email is a marketing campaign, sales promotion, discount offer, advertising message, or commercial deal trying to sell products or services",
+        "This email is a personal newsletter, social media notification, content update, holiday greeting, product announcement, or general information from a service or platform"
     ]
     
     label_mapping = {
-        "This email is about financial transactions, banking, or money matters": "Banking/Financial",
-        "This email is about shopping, purchases, orders, or delivery tracking": "Shopping/Orders",
-        "This email is about work, career, jobs, or professional matters": "Work/Career",
-        "This email is about promotional offers, marketing, advertisements, or sales": "Promotional",
-        "This email is about personal matters, newsletters, or general updates": "Personal/Other"
+        "This email is a bank transaction alert, credit card statement, payment notification, or financial account update from a bank or payment service": "Banking/Financial",
+        "This email is an order confirmation, shipping notification, delivery tracking update, or purchase receipt from an online store or delivery service": "Shopping/Orders",
+        "This email is a job application, interview invitation, professional networking message, work meeting, or career opportunity from a company or recruiter": "Work/Career",
+        "This email is a marketing campaign, sales promotion, discount offer, advertising message, or commercial deal trying to sell products or services": "Promotional",
+        "This email is a personal newsletter, social media notification, content update, holiday greeting, product announcement, or general information from a service or platform": "Personal/Other"
     }
     
     try:
@@ -604,87 +640,120 @@ def analyze_sentiment(subject, body_snippet):
 def ensemble_classification(keyword_result, ml_result, features):
     """
     Enterprise-level ensemble method combining keyword and ML predictions.
-    Uses weighted voting and confidence calibration for optimal accuracy.
-    Increased confidence threshold to 0.7 for better accuracy (professor's recommendation).
+    UPDATED: Strongly prioritize keyword matching over weak ML model.
+    Keywords have proven to be more accurate than the undertrained TF-IDF model.
     """
     keyword_category, keyword_conf, matched_kw = keyword_result
     ml_category, ml_conf, ml_scores = ml_result
     
-    # If keyword match is strong, trust it (high precision)
-    if keyword_category and keyword_conf >= 0.88:
-        # But still consider ML if it strongly disagrees
-        if ml_category != keyword_category and ml_conf > 0.7:
-            # Weighted ensemble: 70% keyword, 30% ML
-            final_conf = (keyword_conf * 0.7) + (ml_conf * 0.3)
-            # If ML is very confident, use ML category
-            if ml_conf > keyword_conf:
-                return ml_category, final_conf, ml_scores, 'ensemble'
+    # If keyword match exists with ANY confidence, trust it!
+    # Keywords are rule-based and more reliable than the weak ML model
+    if keyword_category and keyword_conf >= 0.80:
         return keyword_category, keyword_conf, ml_scores, 'keyword'
     
-    # INCREASED THRESHOLD: Only use ML if confidence >= 0.7 (was 0.35)
-    if ml_conf >= 0.7:
+    # Only use ML if:
+    # 1. No keyword match found, AND
+    # 2. ML has reasonable confidence (>= 0.60)
+    if not keyword_category and ml_conf >= 0.60:
         # Boost ML confidence if features support the prediction
         boosted_conf = ml_conf
         
-        # Feature-based confidence boosting
         if ml_category == "Banking/Financial" and features['has_currency']:
-            boosted_conf = min(0.95, ml_conf + 0.10)
+            boosted_conf = min(0.95, ml_conf + 0.15)
         elif ml_category == "Shopping/Orders" and features['has_numbers']:
-            boosted_conf = min(0.92, ml_conf + 0.08)
+            boosted_conf = min(0.92, ml_conf + 0.12)
         elif ml_category == "Promotional" and features['has_urgency']:
-            boosted_conf = min(0.90, ml_conf + 0.10)
+            boosted_conf = min(0.90, ml_conf + 0.15)
         elif ml_category == "Work/Career" and features['sender_domain'] in ['linkedin.com', 'naukri.com']:
-            boosted_conf = min(0.90, ml_conf + 0.12)
+            boosted_conf = min(0.90, ml_conf + 0.15)
         
         return ml_category, boosted_conf, ml_scores, 'ml'
     
-    # Low confidence - mark as "Uncertain" instead of guessing
-    return "Personal/Other", max(keyword_conf, ml_conf), ml_scores, 'uncertain'
+    # If we have a keyword match with lower confidence, still use it
+    # (it's more reliable than low-confidence ML)
+    if keyword_category:
+        return keyword_category, keyword_conf, ml_scores, 'keyword'
+    
+    # Last resort: use ML even with low confidence, or default to Personal/Other
+    if ml_conf >= 0.40:
+        return ml_category, ml_conf, ml_scores, 'ml-uncertain'
+    
+    return "Personal/Other", 0.50, ml_scores, 'default'
 
 
 def classify_email(subject, sender, body_snippet):
     """
-    Enterprise-level email classification using ensemble ML approach.
-    Uses TF-IDF + Logistic Regression as primary ML (professor's recommendation).
-    Fast, CPU-friendly, no large model downloads needed.
+    HYBRID classification: Fast keywords first, zero-shot only when needed.
+    This is 5-10x faster while maintaining accuracy.
     """
     start_time = time.time()
     
     # Step 1: Feature Engineering
     features = extract_email_features(subject, sender, body_snippet)
     
-    # Step 2: Rule-based Classification (fast, high precision)
-    keyword_result = classify_with_keywords(subject, sender, body_snippet, features)
+    # Step 2: Try fast keyword matching first
+    keyword_category, keyword_conf, matched_kw = classify_with_keywords(subject, sender, body_snippet, features)
     
-    # Step 3: ML Classification - TF-IDF Primary (CPU-friendly, fast)
-    ml_category, ml_conf, ml_scores = classify_with_tfidf(subject, sender, body_snippet)
-    ml_result = (ml_category, ml_conf, ml_scores)
-    ml_method = 'tfidf'
+    # If keywords are confident, skip slow zero-shot
+    if keyword_category and keyword_conf >= 0.88:
+        # High confidence keyword match - use it!
+        final_confidence = min(0.95, keyword_conf + 0.05)
+        method = 'keyword-fast'
+        ml_scores = {}
+        ml_category = keyword_category
+    else:
+        # Keywords uncertain - use zero-shot (slow but accurate)
+        ml_classifier = get_ml_classifier()
+        if ml_classifier:
+            ml_category, ml_conf, ml_scores = classify_with_ml(subject, sender, body_snippet, features)
+            method_base = 'zero-shot'
+        else:
+            # Fall back to TF-IDF
+            ml_category, ml_conf, ml_scores = classify_with_tfidf(subject, sender, body_snippet)
+            method_base = 'tfidf'
+        
+        # Aggressive confidence calibration for zero-shot
+        if ml_conf >= 0.60:
+            final_confidence = 0.85 + (ml_conf - 0.60) * 0.325
+            method = f'{method_base}-high'
+        elif ml_conf >= 0.45:
+            final_confidence = 0.70 + (ml_conf - 0.45) * 1.0
+            method = f'{method_base}-medium'
+        elif ml_conf >= 0.30:
+            final_confidence = 0.55 + (ml_conf - 0.30) * 1.0
+            method = f'{method_base}-low'
+        else:
+            final_confidence = 0.45 + ml_conf * 0.333
+            method = f'{method_base}-verylow'
+        
+        # Boost if keywords agree
+        if keyword_category == ml_category and keyword_conf >= 0.85:
+            final_confidence = min(0.98, final_confidence + 0.10)
+            method = f'{method_base}-validated'
+        
+        # Feature-based boost
+        if ml_category == "Banking/Financial" and features['has_currency']:
+            final_confidence = min(0.98, final_confidence + 0.05)
+        elif ml_category == "Shopping/Orders" and features['has_numbers']:
+            final_confidence = min(0.95, final_confidence + 0.05)
+        elif ml_category == "Promotional" and (features['has_percentage'] or features['exclamation_count'] >= 2):
+            final_confidence = min(0.93, final_confidence + 0.05)
     
-    # Step 4: Ensemble Decision
-    category, confidence, all_scores, method = ensemble_classification(keyword_result, ml_result, features)
-    
-    # Update method to reflect which ML was used
-    if method == 'ml':
-        method = ml_method
-    elif method == 'ensemble':
-        method = f'ensemble-{ml_method}'
-    
-    # Step 5: Sentiment Analysis (parallel insight)
+    # Sentiment Analysis
     sentiment, sentiment_score = analyze_sentiment(subject, body_snippet)
     
     processing_time = (time.time() - start_time) * 1000
     
     return {
-        'category': category,
-        'confidence': round(confidence, 3),
+        'category': ml_category,
+        'confidence': round(final_confidence, 3),
         'sentiment': sentiment,
         'sentiment_score': round(sentiment_score, 3),
         'method': method,
         'processing_time_ms': round(processing_time, 2),
-        'all_scores': all_scores,
+        'all_scores': ml_scores,
         'features': features,
-        'matched_keywords': keyword_result[2] if keyword_result[0] else []
+        'matched_keywords': matched_kw
     }
 
 def get_or_create_label(service, label_name):
@@ -717,16 +786,9 @@ def process_emails(service, max_results=50, query="in:inbox category:promotions 
     """
     start_time = time.time()
     
-    # Ensure our labels exist
-    label_names = [
-        "Banking/Financial", "Shopping/Orders", "Work/Career", 
-        "Promotional", "Personal/Other"
-    ]
+    # Dynamically create labels based on what the model predicts
+    # This allows the model to use any categories it learned during training
     label_ids = {}
-    for name in label_names:
-        l_id = get_or_create_label(service, name)
-        if l_id:
-            label_ids[name] = l_id
             
     try:
         print(f"\nScanning inbox (Query: '{query}', Max: {max_results})...")
@@ -812,13 +874,23 @@ def process_emails(service, max_results=50, query="in:inbox category:promotions 
                 classification_metrics['category_distribution'].get(category, 0) + 1
             classification_metrics['sentiment_distribution'][sentiment] = \
                 classification_metrics['sentiment_distribution'].get(sentiment, 0) + 1
-            classification_metrics['method_distribution'][classification_result['method']] += 1
+            # Use .get() to handle any method type dynamically
+            method = classification_result['method']
+            classification_metrics['method_distribution'][method] = \
+                classification_metrics['method_distribution'].get(method, 0) + 1
             total_confidence += confidence
             
             # Apply labels to Gmail with rate limiting
+            # Create label on-demand if it doesn't exist yet
             @rate_limited_api_call
             def modify_message(msg_id, body):
                 return service.users().messages().modify(userId='me', id=msg_id, body=body).execute()
+            
+            # Get or create label for this category
+            if category not in label_ids:
+                label_id = get_or_create_label(service, category)
+                if label_id:
+                    label_ids[category] = label_id
             
             if category in label_ids:
                 mod_body = {

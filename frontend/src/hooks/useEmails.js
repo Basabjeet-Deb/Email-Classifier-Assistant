@@ -19,18 +19,20 @@ export const useEmails = () => {
       if (response.data.status === 'success') {
         setEmails(response.data.emails);
         setMetrics(response.data.metrics);
-        toast.success(`Analyzed ${response.data.processed_count} emails`);
         return response.data;
       }
     } catch (error) {
-      toast.error('Failed to scan emails: ' + error.message);
       throw error;
     } finally {
       setLoading(false);
     }
   };
 
-  const deleteEmails = async (accountId, messageIds) => {
+  const deleteEmails = async (accountId, messageIds, toastId) => {
+    // Optimistic update - remove emails from UI immediately
+    const previousEmails = [...emails];
+    setEmails(prev => prev.filter(e => !messageIds.includes(e.id)));
+    
     try {
       const response = await emailAPI.deleteEmails({
         account_id: accountId,
@@ -38,12 +40,12 @@ export const useEmails = () => {
       });
       
       if (response.data.status === 'success') {
-        setEmails(prev => prev.filter(e => !messageIds.includes(e.id)));
-        toast.success(`Deleted ${response.data.deleted_count} emails`);
+        // Success - emails already removed from UI
         return response.data;
       }
     } catch (error) {
-      toast.error('Failed to delete emails: ' + error.message);
+      // Rollback on error - restore emails to UI
+      setEmails(previousEmails);
       throw error;
     }
   };

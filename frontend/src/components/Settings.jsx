@@ -19,49 +19,49 @@ export const Settings = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold text-neutral-900">Settings</h1>
-        <p className="text-neutral-500 mt-1">Manage your email classifier settings</p>
+        <h1 className="text-2xl font-bold text-neutral-100">Settings</h1>
+        <p className="text-neutral-500 mt-1 text-sm">Manage your email classifier settings</p>
       </div>
 
       {/* ML Model Settings */}
-      <div className="bg-white rounded-xl shadow-card border border-neutral-200 p-6">
+      <div className="glass rounded-xl p-5">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
-            <Zap className="text-primary-600" size={20} />
+          <div className="w-9 h-9 bg-primary-500/15 rounded-lg flex items-center justify-center">
+            <Zap className="text-primary-400" size={18} />
           </div>
           <div>
-            <h3 className="font-semibold text-neutral-900">ML Model</h3>
-            <p className="text-sm text-neutral-500">TF-IDF + Logistic Regression</p>
+            <h3 className="font-semibold text-neutral-200 text-sm">ML Model</h3>
+            <p className="text-[11px] text-neutral-500">TF-IDF + Logistic Regression</p>
           </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="flex items-center justify-between p-4 bg-neutral-50 rounded-lg">
+        <div className="space-y-3">
+          <div className="flex items-center justify-between p-3.5 bg-white/[0.02] rounded-lg border border-white/[0.04]">
             <div>
-              <p className="font-medium text-neutral-900">Confidence Threshold</p>
-              <p className="text-sm text-neutral-500">Current: 70% (High accuracy mode)</p>
+              <p className="text-[13px] font-medium text-neutral-200">Confidence Threshold</p>
+              <p className="text-[11px] text-neutral-500 mt-0.5">Current: 70% (High accuracy mode)</p>
             </div>
-            <span className="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-sm font-medium">
+            <span className="px-2.5 py-1 bg-emerald-500/15 text-emerald-400 rounded-md text-[11px] font-medium">
               Active
             </span>
           </div>
 
-          <div className="flex items-center justify-between p-4 bg-neutral-50 rounded-lg">
+          <div className="flex items-center justify-between p-3.5 bg-white/[0.02] rounded-lg border border-white/[0.04]">
             <div>
-              <p className="font-medium text-neutral-900">Categories</p>
-              <p className="text-sm text-neutral-500">5 categories for better accuracy</p>
+              <p className="text-[13px] font-medium text-neutral-200">Categories</p>
+              <p className="text-[11px] text-neutral-500 mt-0.5">5 categories for better accuracy</p>
             </div>
-            <span className="text-sm font-medium text-neutral-600">5</span>
+            <span className="text-[12px] font-medium text-neutral-400">5</span>
           </div>
 
-          <div className="flex items-center justify-between p-4 bg-amber-50 rounded-lg border border-amber-200">
+          <div className="flex items-center justify-between p-3.5 bg-amber-500/[0.04] rounded-lg border border-amber-500/10">
             <div>
-              <p className="font-medium text-neutral-900">Rate Limiting</p>
-              <p className="text-sm text-neutral-500">200ms delay + sequential processing</p>
+              <p className="text-[13px] font-medium text-neutral-200">Rate Limiting</p>
+              <p className="text-[11px] text-neutral-500 mt-0.5">200ms delay + sequential processing</p>
             </div>
-            <span className="px-3 py-1 bg-amber-100 text-amber-700 rounded-lg text-sm font-medium">
+            <span className="px-2.5 py-1 bg-amber-500/15 text-amber-400 rounded-md text-[11px] font-medium">
               Protected
             </span>
           </div>
@@ -69,76 +69,76 @@ export const Settings = () => {
           <button
             onClick={handleRetrain}
             disabled={retraining}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-all disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-600/80 text-white rounded-lg hover:bg-primary-600 transition-all disabled:opacity-50 text-[13px] font-medium"
           >
-            <RefreshCw size={20} className={retraining ? 'animate-spin' : ''} />
+            <RefreshCw size={16} className={retraining ? 'animate-spin' : ''} />
             <span>{retraining ? 'Retraining...' : 'Retrain Model'}</span>
           </button>
         </div>
       </div>
 
       {/* Database Settings */}
-      <div className="bg-white rounded-xl shadow-card border border-neutral-200 p-6">
+      <div className="glass rounded-xl p-5">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 bg-secondary-100 rounded-lg flex items-center justify-center">
-            <Database className="text-secondary-600" size={20} />
+          <div className="w-9 h-9 bg-blue-500/15 rounded-lg flex items-center justify-center">
+            <Database className="text-blue-400" size={18} />
           </div>
           <div>
-            <h3 className="font-semibold text-neutral-900">Database</h3>
-            <p className="text-sm text-neutral-500">Classification history storage</p>
+            <h3 className="font-semibold text-neutral-200 text-sm">Database</h3>
+            <p className="text-[11px] text-neutral-500">Classification history storage</p>
           </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="flex items-center justify-between p-4 bg-neutral-50 rounded-lg">
+        <div className="space-y-3">
+          <div className="flex items-center justify-between p-3.5 bg-white/[0.02] rounded-lg border border-white/[0.04]">
             <div>
-              <p className="font-medium text-neutral-900">Storage Type</p>
-              <p className="text-sm text-neutral-500">SQLite (Local)</p>
+              <p className="text-[13px] font-medium text-neutral-200">Storage Type</p>
+              <p className="text-[11px] text-neutral-500 mt-0.5">SQLite (Local)</p>
             </div>
-            <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium">
+            <span className="px-2.5 py-1 bg-blue-500/15 text-blue-400 rounded-md text-[11px] font-medium">
               Connected
             </span>
           </div>
 
-          <div className="flex items-center justify-between p-4 bg-neutral-50 rounded-lg">
+          <div className="flex items-center justify-between p-3.5 bg-white/[0.02] rounded-lg border border-white/[0.04]">
             <div>
-              <p className="font-medium text-neutral-900">Analytics Retention</p>
-              <p className="text-sm text-neutral-500">Unlimited history</p>
+              <p className="text-[13px] font-medium text-neutral-200">Analytics Retention</p>
+              <p className="text-[11px] text-neutral-500 mt-0.5">Unlimited history</p>
             </div>
-            <span className="text-sm font-medium text-neutral-600">∞</span>
+            <span className="text-[12px] font-medium text-neutral-400">∞</span>
           </div>
         </div>
       </div>
 
       {/* Security Settings */}
-      <div className="bg-white rounded-xl shadow-card border border-neutral-200 p-6">
+      <div className="glass rounded-xl p-5">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 bg-accent-100 rounded-lg flex items-center justify-center">
-            <Shield className="text-accent-600" size={20} />
+          <div className="w-9 h-9 bg-emerald-500/15 rounded-lg flex items-center justify-center">
+            <Shield className="text-emerald-400" size={18} />
           </div>
           <div>
-            <h3 className="font-semibold text-neutral-900">Security</h3>
-            <p className="text-sm text-neutral-500">Protected categories and permissions</p>
+            <h3 className="font-semibold text-neutral-200 text-sm">Security</h3>
+            <p className="text-[11px] text-neutral-500">Protected categories and permissions</p>
           </div>
         </div>
 
         <div className="space-y-3">
-          <div className="flex items-center justify-between p-4 bg-neutral-50 rounded-lg">
+          <div className="flex items-center justify-between p-3.5 bg-white/[0.02] rounded-lg border border-white/[0.04]">
             <div>
-              <p className="font-medium text-neutral-900">Protected Categories</p>
-              <p className="text-sm text-neutral-500">Banking, Work, Shopping</p>
+              <p className="text-[13px] font-medium text-neutral-200">Protected Categories</p>
+              <p className="text-[11px] text-neutral-500 mt-0.5">Banking, Work, Shopping</p>
             </div>
-            <span className="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-sm font-medium">
+            <span className="px-2.5 py-1 bg-emerald-500/15 text-emerald-400 rounded-md text-[11px] font-medium">
               Enabled
             </span>
           </div>
 
-          <div className="flex items-center justify-between p-4 bg-neutral-50 rounded-lg">
+          <div className="flex items-center justify-between p-3.5 bg-white/[0.02] rounded-lg border border-white/[0.04]">
             <div>
-              <p className="font-medium text-neutral-900">Gmail Permissions</p>
-              <p className="text-sm text-neutral-500">Read, Modify, Label</p>
+              <p className="text-[13px] font-medium text-neutral-200">Gmail Permissions</p>
+              <p className="text-[11px] text-neutral-500 mt-0.5">Read, Modify, Label</p>
             </div>
-            <span className="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-sm font-medium">
+            <span className="px-2.5 py-1 bg-emerald-500/15 text-emerald-400 rounded-md text-[11px] font-medium">
               Granted
             </span>
           </div>
