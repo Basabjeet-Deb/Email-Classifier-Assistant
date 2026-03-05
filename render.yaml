@@ -16,6 +16,11 @@ services:
       - key: PORT
         value: 8000
     healthCheckPath: /api/status
+    # Persistent disk for database storage (tokens and analytics)
+    disk:
+      name: email-classifier-data
+      mountPath: /opt/render/project/src
+      sizeGB: 1
     
   # Frontend Service
   - type: web

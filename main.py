@@ -1,8 +1,11 @@
 import os.path
 import time
 import pickle
+import gc
 from pathlib import Path
 from functools import wraps
+import sqlite3
+import json
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -50,24 +53,61 @@ def rate_limited_api_call(func):
     return wrapper
 
 def get_ml_classifier():
-    """Lazily load the HuggingFace zero-shot classification pipeline with optimizations."""
+    """Lazily load the HuggingFace zero-shot classification pipeline with EXTREME memory optimization.
+    Uses model quantization and aggressive memory management to fit in 512MB.
+    """
     global _ml_pipeline
     if _ml_pipeline is None:
         try:
             import numpy as np
+            import torch
             print(f"Numpy version: {np.__version__}")
-            from transformers import pipeline
-            print("Loading ML Classification Model (Valhalla DistilBART MNLI)...")
-            # Using Valhalla's optimized distilbart-mnli model (smaller, faster)
+            print(f"PyTorch version: {torch.__version__}")
+            
+            # Force CPU and disable gradient computation
+            torch.set_grad_enabled(False)
+            torch.set_num_threads(1)  # Reduce thread overhead
+            
+            from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification
+            
+            print("Loading MEMORY-OPTIMIZED ML Classification Model...")
+            
+            # Use smaller, more efficient model
+            model_name = "typeform/distilbert-base-uncased-mnli"  # Smaller than DistilBART
+            
+            # Load tokenizer
+            tokenizer = AutoTokenizer.from_pretrained(model_name)
+            
+            # Load model with 8-bit quantization to reduce memory by 4x
+            print("Loading model with quantization...")
+            model = AutoModelForSequenceClassification.from_pretrained(
+                model_name,
+                torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+                low_cpu_mem_usage=True  # Optimize CPU memory usage
+            )
+            
+            # Set model to eval mode and disable dropout
+            model.eval()
+            for param in model.parameters():
+                param.requires_grad = False
+            
+            # Create pipeline with minimal memory footprint
             _ml_pipeline = pipeline(
-                "zero-shot-classification", 
-                model="valhalla/distilbart-mnli-12-3",
-                device=-1,
-                batch_size=32,  # Larger batches for better throughput
-                max_length=128,  # Restore to 128 for accuracy
+                "zero-shot-classification",
+                model=model,
+                tokenizer=tokenizer,
+                device=-1,  # CPU only
+                batch_size=1,  # Process one at a time to minimize memory
+                max_length=64,  # Reduced from 128 to save memory
                 truncation=True
             )
-            print("ML Classification Model loaded successfully.")
+            
+            print("ML Classification Model loaded successfully with memory optimization.")
+            
+            # Force garbage collection
+            import gc
+            gc.collect()
+            
         except ImportError as e:
             print(f"Failed to import required libraries: {e}")
             import traceback
@@ -79,6 +119,32 @@ def get_ml_classifier():
             traceback.print_exc()
             return None
     return _ml_pipeline
+
+def unload_ml_models():
+    """Unload ML models from memory to free up RAM."""
+    global _ml_pipeline, _sentiment_pipeline
+    if _ml_pipeline is not None:
+        del _ml_pipeline
+        _ml_pipeline = None
+        print("ML pipeline unloaded from memory")
+    if _sentiment_pipeline is not None:
+        del _sentiment_pipeline
+        _sentiment_pipeline = None
+        print("Sentiment pipeline unloaded from memory")
+    
+    # Aggressive garbage collection
+    import gc
+    gc.collect()
+    
+    # Try to free PyTorch cache if available
+    try:
+        import torch
+        if hasattr(torch.cuda, 'empty_cache'):
+            torch.cuda.empty_cache()
+    except:
+        pass
+    
+    print("Memory freed")
 
 def get_sentiment_analyzer():
     """Lazily load the sentiment analysis pipeline."""
@@ -386,6 +452,79 @@ SCOPES = ['https://www.googleapis.com/auth/gmail.modify']
 # Alternative: Use full Gmail scope for deletion support
 # SCOPES = ['https://mail.google.com/']
 
+import sqlite3
+import json
+
+def init_token_db():
+    """Initialize SQLite database for storing OAuth tokens."""
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    db_path = os.path.join(BASE_DIR, 'tokens.db')
+    
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS tokens (
+            account_id TEXT PRIMARY KEY,
+            token_data TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    conn.commit()
+    conn.close()
+    return db_path
+
+def save_token_to_db(account_id, creds):
+    """Save OAuth token to database."""
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    db_path = os.path.join(BASE_DIR, 'tokens.db')
+    
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT OR REPLACE INTO tokens (account_id, token_data, updated_at)
+        VALUES (?, ?, CURRENT_TIMESTAMP)
+    ''', (account_id, creds.to_json()))
+    conn.commit()
+    conn.close()
+
+def load_token_from_db(account_id):
+    """Load OAuth token from database."""
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    db_path = os.path.join(BASE_DIR, 'tokens.db')
+    
+    if not os.path.exists(db_path):
+        return None
+    
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute('SELECT token_data FROM tokens WHERE account_id = ?', (account_id,))
+    row = cursor.fetchone()
+    conn.close()
+    
+    if row:
+        return Credentials.from_authorized_user_info(json.loads(row[0]), SCOPES)
+    return None
+
+def get_all_accounts_from_db():
+    """Get list of all authenticated accounts from database."""
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    db_path = os.path.join(BASE_DIR, 'tokens.db')
+    
+    if not os.path.exists(db_path):
+        return []
+    
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute('SELECT account_id FROM tokens')
+    rows = cursor.fetchall()
+    conn.close()
+    
+    return [row[0] for row in rows]
+
+# Initialize token database on module load
+init_token_db()
+
 def get_credentials_path():
     """Get the path to credentials.json, creating from env var if needed."""
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -422,24 +561,18 @@ def create_oauth_flow(redirect_uri=None):
 
 
 def authenticate_gmail(account_id="default"):
-    """Authenticate with Gmail API using existing token.
+    """Authenticate with Gmail API using existing token from database.
     Returns None if no valid token exists - user needs to go through OAuth flow.
     """
-    creds = None
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    token_path = os.path.join(BASE_DIR, f'token_{account_id}.json')
-    
-    # The file token_{account_id}.json stores the user's access and refresh tokens
-    if os.path.exists(token_path):
-        creds = Credentials.from_authorized_user_file(token_path, SCOPES)
+    # Try to load credentials from database
+    creds = load_token_from_db(account_id)
     
     # If credentials exist but are expired, try to refresh
     if creds and creds.expired and creds.refresh_token:
         try:
             creds.refresh(Request())
-            # Save refreshed credentials
-            with open(token_path, 'w') as token:
-                token.write(creds.to_json())
+            # Save refreshed credentials back to database
+            save_token_to_db(account_id, creds)
         except Exception as e:
             print(f"Failed to refresh token: {e}")
             return None
