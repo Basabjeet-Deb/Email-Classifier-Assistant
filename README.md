@@ -1,6 +1,6 @@
 # AI Email Classifier Assistant
 
-> Enterprise-grade email classification system using ensemble machine learning with TF-IDF, Logistic Regression, and intelligent feature engineering. Achieves 90%+ accuracy with <250ms processing time per email.
+> Enterprise-grade email classification system using ensemble machine learning with TF-IDF, Logistic Regression, and intelligent feature engineering. Achieves 90%+ accuracy with <250ms processing time per email. For Deployment reasons the main classification model was cut short and made runnable under 512mb of ram , the real model or the full classification model that has better accuracy takes 1gb to 1.5gb of ram making it hard for me to make it deployable without any capital involved hence this version.
 
 [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com/)
