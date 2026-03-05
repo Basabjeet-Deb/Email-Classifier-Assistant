@@ -86,14 +86,85 @@ def get_status():
         return {"status": "connected", "accounts": connected_accounts}
     return {"status": "disconnected", "accounts": []}
 
+@app.get("/api/auth/login")
+def auth_login():
+    """Start OAuth flow - returns authorization URL for user to visit."""
+    try:
+        # Get the backend URL from environment or construct it
+        backend_url = os.getenv("BACKEND_URL", "http://localhost:8000")
+        redirect_uri = f"{backend_url}/api/auth/callback"
+        
+        flow = email_core.create_oauth_flow(redirect_uri=redirect_uri)
+        if not flow:
+            raise HTTPException(status_code=500, detail="Failed to create OAuth flow")
+        
+        authorization_url, state = flow.authorization_url(
+            access_type='offline',
+            include_granted_scopes='true',
+            prompt='consent'  # Force consent screen to get refresh token
+        )
+        
+        # Store state in session or return it to frontend
+        return {
+            "authorization_url": authorization_url,
+            "state": state
+        }
+    except Exception as e:
+        import traceback
+        print(f"ERROR in auth_login: {str(e)}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/auth/callback")
+def auth_callback(code: str, state: str = None):
+    """Handle OAuth callback from Google."""
+    try:
+        backend_url = os.getenv("BACKEND_URL", "http://localhost:8000")
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+        redirect_uri = f"{backend_url}/api/auth/callback"
+        
+        flow = email_core.create_oauth_flow(redirect_uri=redirect_uri)
+        if not flow:
+            raise HTTPException(status_code=500, detail="Failed to create OAuth flow")
+        
+        # Exchange authorization code for credentials
+        flow.fetch_token(code=code)
+        creds = flow.credentials
+        
+        # Get user's email address
+        from googleapiclient.discovery import build
+        service = build('gmail', 'v1', credentials=creds)
+        profile = service.users().getProfile(userId='me').execute()
+        email_address = profile.get('emailAddress', 'default')
+        
+        # Save credentials
+        token_path = os.path.join(BASE_DIR, f'token_{email_address}.json')
+        with open(token_path, 'w') as token:
+            token.write(creds.to_json())
+        
+        print(f"Successfully authenticated: {email_address}")
+        
+        # Redirect back to frontend with success
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url=f"{frontend_url}?auth=success&email={email_address}")
+        
+    except Exception as e:
+        import traceback
+        print(f"ERROR in auth_callback: {str(e)}")
+        print(traceback.format_exc())
+        # Redirect to frontend with error
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+        return RedirectResponse(url=f"{frontend_url}?auth=error&message={str(e)}")
+
 @app.post("/api/auth")
 def auth_new_account():
-    """Explicitly triggers the OAuth flow to add a new account."""
-    service = email_core.authenticate_gmail("default")
-    if service:
-        # The main logic automatically renames the default token to the real email
-        return {"status": "success", "message": "Account added."}
-    raise HTTPException(status_code=401, detail="Failed to authenticate.")
+    """DEPRECATED: Use /api/auth/login instead.
+    This endpoint is kept for backward compatibility but returns instructions."""
+    return {
+        "status": "redirect_required",
+        "message": "Please use /api/auth/login to get authorization URL",
+        "instructions": "Call GET /api/auth/login to start OAuth flow"
+    }
 
 @app.post("/api/scan")
 def scan_emails(req: ScanRequest):

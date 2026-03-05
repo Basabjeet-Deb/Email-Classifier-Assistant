@@ -25,6 +25,10 @@ export const emailAPI = {
   
   retrainTfidf: () => api.post('/retrain-tfidf'),
   
+  // New OAuth flow
+  startAuth: () => api.get('/auth/login'),
+  
+  // Legacy endpoint (deprecated)
   authenticate: () => api.post('/auth'),
 };
 

@@ -386,46 +386,67 @@ SCOPES = ['https://www.googleapis.com/auth/gmail.modify']
 # Alternative: Use full Gmail scope for deletion support
 # SCOPES = ['https://mail.google.com/']
 
-def authenticate_gmail(account_id="default"):
-    """Shows basic usage of the Gmail API.
-    Lists the user's Gmail labels.
-    """
-    creds = None
-    # Define absolute paths based on where main.py is located
+def get_credentials_path():
+    """Get the path to credentials.json, creating from env var if needed."""
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    token_path = os.path.join(BASE_DIR, f'token_{account_id}.json')
     creds_path = os.path.join(BASE_DIR, 'credentials.json')
     
     # Check if credentials.json exists, if not try environment variable
     if not os.path.exists(creds_path):
-        # Try to get credentials from environment variable
         creds_json = os.getenv('GOOGLE_CREDENTIALS_JSON')
         if creds_json:
             import json
-            # Write credentials to file temporarily
             with open(creds_path, 'w') as f:
                 f.write(creds_json)
             print("Using credentials from environment variable")
         else:
             print("ERROR: credentials.json not found and GOOGLE_CREDENTIALS_JSON not set")
             return None
+    return creds_path
+
+
+def create_oauth_flow(redirect_uri=None):
+    """Create OAuth flow for web-based authentication."""
+    from google_auth_oauthlib.flow import Flow
+    
+    creds_path = get_credentials_path()
+    if not creds_path:
+        return None
+    
+    flow = Flow.from_client_secrets_file(
+        creds_path,
+        scopes=SCOPES,
+        redirect_uri=redirect_uri
+    )
+    return flow
+
+
+def authenticate_gmail(account_id="default"):
+    """Authenticate with Gmail API using existing token.
+    Returns None if no valid token exists - user needs to go through OAuth flow.
+    """
+    creds = None
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    token_path = os.path.join(BASE_DIR, f'token_{account_id}.json')
     
     # The file token_{account_id}.json stores the user's access and refresh tokens
     if os.path.exists(token_path):
         creds = Credentials.from_authorized_user_file(token_path, SCOPES)
     
-    # If there are no (valid) credentials available, let the user log in.
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
+    # If credentials exist but are expired, try to refresh
+    if creds and creds.expired and creds.refresh_token:
+        try:
             creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                creds_path, SCOPES)
-            creds = flow.run_local_server(port=0)
-        
-        # Save the credentials for the next run
-        with open(token_path, 'w') as token:
-            token.write(creds.to_json())
+            # Save refreshed credentials
+            with open(token_path, 'w') as token:
+                token.write(creds.to_json())
+        except Exception as e:
+            print(f"Failed to refresh token: {e}")
+            return None
+    
+    # If no valid credentials, return None (user needs to authenticate via OAuth)
+    if not creds or not creds.valid:
+        return None
 
     try:
         # Call the Gmail API

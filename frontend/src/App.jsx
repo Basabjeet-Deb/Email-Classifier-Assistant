@@ -29,6 +29,22 @@ function AppContent() {
 
   useEffect(() => {
     checkStatus();
+    
+    // Check for OAuth callback parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const authStatus = urlParams.get('auth');
+    const email = urlParams.get('email');
+    const message = urlParams.get('message');
+    
+    if (authStatus === 'success') {
+      toast.success(`Successfully authenticated: ${email}`);
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      checkStatus();
+    } else if (authStatus === 'error') {
+      toast.error(`Authentication failed: ${message || 'Unknown error'}`);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
   }, []);
 
   const checkStatus = async () => {
@@ -57,14 +73,42 @@ function AppContent() {
 
   const handleLogin = async () => {
     try {
-      await emailAPI.authenticate();
-      toast.success('Authentication started. Check your browser.');
-      // Wait and check status
-      setTimeout(async () => {
-        await checkStatus();
-      }, 3000);
+      const response = await emailAPI.startAuth();
+      const { authorization_url } = response.data;
+      
+      // Redirect user to Google OAuth page
+      window.location.href = authorization_url;
     } catch (error) {
-      toast.error('Failed to authenticate');
+      console.error('Auth error:', error);
+      toast.error('Failed to start authentication');
+    }
+  };
+
+  const handleAddAccount = async () => {
+    try {
+      const response = await emailAPI.startAuth();
+      const { authorization_url } = response.data;
+      
+      // Open in new window for adding additional accounts
+      window.open(authorization_url, '_blank', 'width=600,height=700');
+      
+      toast.success('Authentication window opened. Complete the process there.');
+      
+      // Poll for status updates
+      const pollInterval = setInterval(async () => {
+        const statusResponse = await emailAPI.getStatus();
+        if (statusResponse.data.accounts.length > availableAccounts.length) {
+          clearInterval(pollInterval);
+          await checkStatus();
+          toast.success('New account added successfully!');
+        }
+      }, 2000);
+      
+      // Stop polling after 2 minutes
+      setTimeout(() => clearInterval(pollInterval), 120000);
+    } catch (error) {
+      console.error('Auth error:', error);
+      toast.error('Failed to add account');
     }
   };
 
@@ -72,16 +116,6 @@ function AppContent() {
     setActiveAccount(account);
     setSelectedIds([]);
     toast.success(`Switched to ${account}`);
-  };
-
-  const handleAddAccount = async () => {
-    try {
-      await emailAPI.authenticate();
-      toast.success('Account authentication started. Check your browser.');
-      setTimeout(() => checkStatus(), 2000);
-    } catch (error) {
-      toast.error('Failed to add account');
-    }
   };
 
   const handleScan = async () => {
