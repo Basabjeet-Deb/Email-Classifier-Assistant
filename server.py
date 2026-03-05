@@ -19,8 +19,8 @@ ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 allowed_origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "https://email-classifier-frontend-5431.onrender.com",
-    "https://email-classifier-api-qadx.onrender.com",
+    "https://email-classifier-frontend-mnj8.onrender.com",  # Your NEW frontend URL
+    "https://email-classifier-assistant.onrender.com",  # Your NEW backend URL
     FRONTEND_URL,
 ]
 
