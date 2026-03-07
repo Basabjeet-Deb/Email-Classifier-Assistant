@@ -6,26 +6,47 @@ import { emailAPI } from '../api/client';
 
 const getCategoryColor = (category) => {
   const colors = {
-    'Banking/Financial': 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20',
-    'Shopping/Orders': 'bg-blue-500/15 text-blue-400 border-blue-500/20',
-    'Work/Career': 'bg-cyan-500/15 text-cyan-400 border-cyan-500/20',
+    'Important': 'bg-red-500/15 text-red-400 border-red-500/20',
+    'Transactional': 'bg-blue-500/15 text-blue-400 border-blue-500/20',
     'Promotional': 'bg-amber-500/15 text-amber-400 border-amber-500/20',
-    'Personal/Other': 'bg-neutral-500/15 text-neutral-400 border-neutral-500/20',
+    'Social': 'bg-cyan-500/15 text-cyan-400 border-cyan-500/20',
+    'Spam': 'bg-neutral-500/15 text-neutral-400 border-neutral-500/20',
   };
   return colors[category] || 'bg-neutral-500/15 text-neutral-400 border-neutral-500/20';
 };
 
 const isProtected = (category) => {
-  return ['Banking/Financial', 'Work/Career', 'Shopping/Orders'].some(c => category.includes(c));
+  return ['Important', 'Transactional'].includes(category);
+};
+
+const getSuggestedAction = (category) => {
+  const actions = {
+    'Important': { action: 'Keep', color: 'text-emerald-400', icon: '✓' },
+    'Transactional': { action: 'Keep', color: 'text-blue-400', icon: '✓' },
+    'Promotional': { action: 'Archive', color: 'text-amber-400', icon: '📦' },
+    'Social': { action: 'Archive', color: 'text-cyan-400', icon: '📦' },
+    'Spam': { action: 'Delete', color: 'text-red-400', icon: '🗑️' },
+  };
+  return actions[category] || { action: 'Review', color: 'text-neutral-400', icon: '?' };
 };
 
 const getClassifierBadge = (classifier) => {
-  const badges = {
-    'Zero-Shot': { color: 'text-violet-400', bg: 'bg-violet-500/10', label: 'AI' },
-    'TF-IDF': { color: 'text-blue-400', bg: 'bg-blue-500/10', label: 'ML' },
-    'Keyword': { color: 'text-emerald-400', bg: 'bg-emerald-500/10', label: 'Rule' },
-  };
-  return badges[classifier] || { color: 'text-neutral-400', bg: 'bg-neutral-500/10', label: '?' };
+  if (!classifier) {
+    return { color: 'text-neutral-400', bg: 'bg-neutral-500/10', label: '?' };
+  }
+  
+  const classifierLower = classifier.toLowerCase();
+  
+  // Check for classifier type (case-insensitive)
+  if (classifierLower.includes('zero-shot') || classifierLower.includes('zero shot')) {
+    return { color: 'text-violet-400', bg: 'bg-violet-500/10', label: 'AI' };
+  } else if (classifierLower.includes('tfidf') || classifierLower.includes('tf-idf')) {
+    return { color: 'text-blue-400', bg: 'bg-blue-500/10', label: 'ML' };
+  } else if (classifierLower.includes('keyword')) {
+    return { color: 'text-emerald-400', bg: 'bg-emerald-500/10', label: 'Rule' };
+  }
+  
+  return { color: 'text-neutral-400', bg: 'bg-neutral-500/10', label: '?' };
 };
 
 export const EmailTableEnhanced = ({ 
@@ -51,7 +72,7 @@ export const EmailTableEnhanced = ({
     : emails.filter(e => e.category === filterCategory);
 
   const categories = ['all', ...new Set(emails.map(e => e.category))];
-  const allCategories = ['Banking/Financial', 'Shopping/Orders', 'Work/Career', 'Promotional', 'Personal/Other'];
+  const allCategories = ['Important', 'Transactional', 'Promotional', 'Social', 'Spam'];
 
   const handleFeedbackSubmit = async () => {
     if (!selectedCorrectCategory || !feedbackEmail) return;
@@ -60,9 +81,11 @@ export const EmailTableEnhanced = ({
     try {
       await emailAPI.submitFeedback({
         email_id: feedbackEmail.id,
+        sender: feedbackEmail.sender || 'unknown@email.com',
+        subject: feedbackEmail.subject || '',
+        body: feedbackEmail.snippet || '',
         predicted_category: feedbackEmail.category,
         correct_category: selectedCorrectCategory,
-        email_text: `${feedbackEmail.subject} ${feedbackEmail.snippet}`,
         confidence: feedbackEmail.confidence,
         classifier_used: feedbackEmail.classifier_used,
       });
@@ -289,6 +312,16 @@ export const EmailTableEnhanced = ({
                 <div>
                   <p className="text-[10px] text-neutral-500 mb-1 uppercase tracking-wider">Classifier Used</p>
                   <p className="text-[12px] text-neutral-300">{selectedEmail.classifier_used || 'Unknown'}</p>
+                </div>
+
+                <div>
+                  <p className="text-[10px] text-neutral-500 mb-1 uppercase tracking-wider">Suggested Action</p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">{getSuggestedAction(selectedEmail.category).icon}</span>
+                    <span className={`text-[12px] font-semibold ${getSuggestedAction(selectedEmail.category).color}`}>
+                      {getSuggestedAction(selectedEmail.category).action}
+                    </span>
+                  </div>
                 </div>
 
                 <div>

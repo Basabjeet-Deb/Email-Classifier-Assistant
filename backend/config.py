@@ -24,12 +24,30 @@ INITIAL_BACKOFF = 1.5  # seconds
 
 # Classification Configuration
 CATEGORIES = [
-    'Banking/Financial',
-    'Shopping/Orders',
-    'Work/Career',
+    'Important',
+    'Transactional',
     'Promotional',
-    'Personal/Other'
+    'Social',
+    'Spam'
 ]
+
+# Category descriptions for intent-based classification
+CATEGORY_DESCRIPTIONS = {
+    'Important': 'Emails requiring immediate attention (job offers, interviews, account alerts, project updates)',
+    'Transactional': 'Receipts, bank statements, order confirmations, delivery updates',
+    'Promotional': 'Marketing emails, sales, advertisements, offers',
+    'Social': 'LinkedIn invites, comments, social notifications',
+    'Spam': 'Lottery scams, phishing, suspicious offers'
+}
+
+# Suggested actions per category
+CATEGORY_ACTIONS = {
+    'Important': 'Keep',
+    'Transactional': 'Keep',
+    'Promotional': 'Archive',
+    'Social': 'Archive',
+    'Spam': 'Delete'
+}
 
 # Model Configuration
 TFIDF_MODEL_PATH = MODELS_DIR / "tfidf_classifier.pkl"
@@ -47,6 +65,11 @@ UNLOAD_UNUSED_MODELS = True  # Unload models after use to save memory
 # Database
 DB_PATH = DATA_DIR / "email_analytics.db"
 FEEDBACK_CSV_PATH = DATA_DIR / "feedback_dataset.csv"
+
+# Self-Learning Configuration
+SELF_LEARNING_ENABLED = True  # Enable automatic retraining
+FEEDBACK_RETRAIN_THRESHOLD = 50  # Retrain after N feedback samples
+MIN_FEEDBACK_FOR_RETRAIN = 10  # Minimum feedback samples needed
 
 # Server Configuration
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")

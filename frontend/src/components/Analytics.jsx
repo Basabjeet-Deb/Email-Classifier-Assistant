@@ -40,7 +40,7 @@ export const Analytics = ({ activeAccount }) => {
     );
   }
 
-  if (!data || !data.analytics) {
+  if (!data || !data.analytics || !data.analytics.total_emails) {
     return (
       <div className="flex flex-col items-center justify-center h-96">
         <div className="text-5xl mb-4">📊</div>
@@ -51,6 +51,18 @@ export const Analytics = ({ activeAccount }) => {
   }
 
   const { analytics, insights } = data;
+  
+  // Ensure all required fields exist with defaults
+  const safeAnalytics = {
+    total_emails: analytics.total_emails || 0,
+    average_confidence: analytics.average_confidence || 0,
+    average_processing_time: analytics.average_processing_time || 0,
+    sentiment_distribution: analytics.sentiment_distribution || { POSITIVE: 0, NEGATIVE: 0, NEUTRAL: 0 },
+    category_distribution: analytics.category_distribution || [],
+    daily_trend: analytics.daily_trend || [],
+    emails_by_hour: analytics.emails_by_hour || Array(24).fill(0),
+    emails_by_day: analytics.emails_by_day || Array(7).fill(0)
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -65,25 +77,25 @@ export const Analytics = ({ activeAccount }) => {
         <StatCard
           icon="📧"
           label="Total Emails"
-          value={analytics.total_emails.toLocaleString()}
+          value={safeAnalytics.total_emails.toLocaleString()}
           gradient="bg-gradient-to-br from-blue-500/10 to-blue-600/5"
         />
         <StatCard
           icon="🎯"
           label="Avg Confidence"
-          value={`${analytics.average_confidence}%`}
+          value={`${safeAnalytics.average_confidence}%`}
           gradient="bg-gradient-to-br from-violet-500/10 to-violet-600/5"
         />
         <StatCard
           icon="⚡"
           label="Avg Speed"
-          value={`${analytics.average_processing_time}ms`}
+          value={`${safeAnalytics.average_processing_time}ms`}
           gradient="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5"
         />
         <StatCard
           icon="😊"
           label="Sentiment"
-          value={analytics.sentiment_distribution.POSITIVE > analytics.sentiment_distribution.NEGATIVE ? 'Positive' : 'Neutral'}
+          value={safeAnalytics.sentiment_distribution.POSITIVE > safeAnalytics.sentiment_distribution.NEGATIVE ? 'Positive' : 'Neutral'}
           gradient="bg-gradient-to-br from-amber-500/10 to-amber-600/5"
         />
       </div>
@@ -111,7 +123,7 @@ export const Analytics = ({ activeAccount }) => {
           <ResponsiveContainer width="100%" height={280}>
             <PieChart>
               <Pie
-                data={analytics.category_distribution}
+                data={safeAnalytics.category_distribution}
                 dataKey="count"
                 nameKey="category"
                 cx="50%"
@@ -121,7 +133,7 @@ export const Analytics = ({ activeAccount }) => {
                 stroke="rgba(0,0,0,0.3)"
                 strokeWidth={2}
               >
-                {analytics.category_distribution.map((entry, index) => (
+                {safeAnalytics.category_distribution.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
@@ -134,7 +146,7 @@ export const Analytics = ({ activeAccount }) => {
         <div className="glass rounded-xl p-5">
           <h3 className="text-sm font-semibold text-neutral-200 mb-4">Daily Trend</h3>
           <ResponsiveContainer width="100%" height={280}>
-            <LineChart data={analytics.daily_trend}>
+            <LineChart data={safeAnalytics.daily_trend}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
               <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#706961' }} />
               <YAxis tick={{ fontSize: 11, fill: '#706961' }} />
@@ -148,7 +160,7 @@ export const Analytics = ({ activeAccount }) => {
         <div className="glass rounded-xl p-5">
           <h3 className="text-sm font-semibold text-neutral-200 mb-4">Emails by Hour</h3>
           <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={analytics.emails_by_hour.map((count, hour) => ({ hour: `${hour}:00`, count }))}>
+            <BarChart data={safeAnalytics.emails_by_hour.map((count, hour) => ({ hour: `${hour}:00`, count }))}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
               <XAxis dataKey="hour" tick={{ fontSize: 10, fill: '#706961' }} />
               <YAxis tick={{ fontSize: 11, fill: '#706961' }} />
@@ -164,7 +176,7 @@ export const Analytics = ({ activeAccount }) => {
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, i) => ({
               day,
-              count: analytics.emails_by_day[i]
+              count: safeAnalytics.emails_by_day[i]
             }))}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
               <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#706961' }} />

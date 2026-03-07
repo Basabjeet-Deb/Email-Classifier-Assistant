@@ -3,15 +3,18 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import toast from 'react-hot-toast';
 import { LandingPage } from './components/LandingPage';
-import { Layout } from './components/Layout';
+import { ModernSidebar } from './components/ModernSidebar';
+import { Navbar } from './components/Navbar';
 import { StatsCards } from './components/StatsCards';
-import { EmailTableEnhanced } from './components/EmailTableEnhanced';
+import { EmailList } from './components/EmailList';
+import { EmailDetails } from './components/EmailDetails';
 import { AIInsightsDashboard } from './components/AIInsightsDashboard';
 import { Analytics } from './components/Analytics';
 import { Settings } from './components/Settings';
 import { useEmails } from './hooks/useEmails';
 import { emailAPI } from './api/client';
 import { Rocket, Trash2, RefreshCw } from 'lucide-react';
+import LightPillar from './components/LightPillar';
 
 const queryClient = new QueryClient();
 
@@ -25,6 +28,8 @@ function AppContent() {
   const [selectedIds, setSelectedIds] = useState([]);
   const [scanLimit, setScanLimit] = useState(50);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedEmail, setSelectedEmail] = useState(null);
+  const [filterCategory, setFilterCategory] = useState('all');
 
   const { emails, loading, metrics, scanInbox, deleteEmails } = useEmails();
 
@@ -39,7 +44,6 @@ function AppContent() {
     
     if (authStatus === 'success') {
       toast.success(`Successfully authenticated: ${email}`);
-      // Clean up URL
       window.history.replaceState({}, document.title, window.location.pathname);
       checkStatus();
     } else if (authStatus === 'error') {
@@ -76,8 +80,6 @@ function AppContent() {
     try {
       const response = await emailAPI.startAuth();
       const { authorization_url } = response.data;
-      
-      // Redirect user to Google OAuth page
       window.location.href = authorization_url;
     } catch (error) {
       console.error('Auth error:', error);
@@ -89,13 +91,9 @@ function AppContent() {
     try {
       const response = await emailAPI.startAuth();
       const { authorization_url } = response.data;
-      
-      // Open in new window for adding additional accounts
       window.open(authorization_url, '_blank', 'width=600,height=700');
-      
       toast.success('Authentication window opened. Complete the process there.');
       
-      // Poll for status updates
       const pollInterval = setInterval(async () => {
         const statusResponse = await emailAPI.getStatus();
         if (statusResponse.data.accounts.length > availableAccounts.length) {
@@ -105,7 +103,6 @@ function AppContent() {
         }
       }, 2000);
       
-      // Stop polling after 2 minutes
       setTimeout(() => clearInterval(pollInterval), 120000);
     } catch (error) {
       console.error('Auth error:', error);
@@ -208,22 +205,25 @@ function AppContent() {
     );
   };
 
-  const handleToggleSelectAll = () => {
-    const selectableEmails = emails.filter(e =>
-      !['Banking/Financial', 'Work/Career', 'Shopping/Orders'].some(c => e.category.includes(c))
-    );
-
-    if (selectedIds.length === selectableEmails.length) {
-      setSelectedIds([]);
-    } else {
-      setSelectedIds(selectableEmails.map(e => e.id));
-    }
-  };
-
   const totalScanned = emails.length;
-  const avgConfidence = metrics?.avg_confidence
-    ? Math.round(metrics.avg_confidence * 100)
+  
+  const avgConfidence = emails.length > 0
+    ? Math.round((emails.reduce((sum, email) => sum + (email.confidence || 0), 0) / emails.length) * 100)
     : 0;
+  
+  const avgProcessingTime = emails.length > 0
+    ? Math.round(emails.reduce((sum, email) => sum + (email.classification_time_ms || 0), 0) / emails.length)
+    : 0;
+  
+  const enhancedMetrics = {
+    ...metrics,
+    avg_confidence: avgConfidence / 100,
+    avg_classification_time_ms: avgProcessingTime,
+    category_distribution: emails.reduce((acc, email) => {
+      acc[email.category] = (acc[email.category] || 0) + 1;
+      return acc;
+    }, {}),
+  };
 
   const filteredEmails = searchQuery
     ? emails.filter(email =>
@@ -232,7 +232,6 @@ function AppContent() {
     )
     : emails;
 
-  // Show landing page if not authenticated
   if (isCheckingAuth) {
     return (
       <div className="flex items-center justify-center h-screen bg-neutral-900">
@@ -249,118 +248,176 @@ function AppContent() {
   }
 
   return (
-    <Layout
-      activeView={activeView}
-      setActiveView={setActiveView}
-      status={status}
-      activeAccount={activeAccount}
-      searchQuery={searchQuery}
-      setSearchQuery={setSearchQuery}
-      availableAccounts={availableAccounts}
-      onAccountSwitch={handleAccountSwitch}
-      onAddAccount={handleAddAccount}
-    >
-      {activeView === 'inbox' ? (
-        <div className="space-y-5">
-          {/* Rate Limit Info Banner */}
-          <div className="glass rounded-lg p-3.5 flex items-start gap-3 border-l-2 border-amber-500/40">
-            <div className="flex-shrink-0 mt-0.5">
-              <svg className="w-4 h-4 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
+    <div className="flex h-screen bg-dark-950 relative overflow-hidden">
+      {/* Ethereal Background Pillars */}
+      <div className="app-background-pillar app-pillar-left">
+        <LightPillar
+          topColor="#a855f7"
+          bottomColor="#ec4899"
+          intensity={0.65}
+          rotationSpeed={0.08}
+          glowAmount={0.005}
+          pillarWidth={2.5}
+          pillarHeight={0.22}
+          noiseIntensity={0.15}
+          mixBlendMode="screen"
+          pillarRotation={-20}
+          quality="medium"
+        />
+      </div>
+      <div className="app-background-pillar app-pillar-right">
+        <LightPillar
+          topColor="#3b82f6"
+          bottomColor="#06b6d4"
+          intensity={0.6}
+          rotationSpeed={0.10}
+          glowAmount={0.005}
+          pillarWidth={2.3}
+          pillarHeight={0.25}
+          noiseIntensity={0.18}
+          mixBlendMode="screen"
+          pillarRotation={20}
+          quality="medium"
+        />
+      </div>
+
+      {/* Sidebar */}
+      <ModernSidebar
+        activeView={activeView}
+        setActiveView={setActiveView}
+        status={status}
+        activeAccount={activeAccount}
+        availableAccounts={availableAccounts}
+        onAccountSwitch={handleAccountSwitch}
+        onAddAccount={handleAddAccount}
+      />
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col overflow-hidden z-10">
+        {/* Top Navbar */}
+        <Navbar searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
+
+        {/* Page Content */}
+        <main className="flex-1 overflow-auto p-6">
+          {activeView === 'inbox' ? (
+            <div className="space-y-5">
+              {/* Rate Limit Info Banner */}
+              <div className="glass rounded-xl p-4 flex items-start gap-3 border-l-4 border-amber-500/60">
+                <div className="flex-shrink-0 mt-0.5">
+                  <svg className="w-5 h-5 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h4 className="text-[13px] font-semibold text-amber-300 mb-1">Gmail API Rate Limits</h4>
+                  <p className="text-[12px] text-neutral-400 leading-relaxed">
+                    Start with 10 emails to avoid rate limits. Wait 30-60 seconds between scans if you hit limits.
+                  </p>
+                </div>
+              </div>
+
+              {/* Page Header */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-2xl font-bold text-neutral-100">Inbox Classification</h1>
+                  <p className="text-neutral-500 mt-1 text-sm">
+                    {searchQuery
+                      ? `Found ${filteredEmails.length} result${filteredEmails.length !== 1 ? 's' : ''} for "${searchQuery}"`
+                      : 'AI-powered email organization'
+                    }
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <select
+                    value={scanLimit}
+                    onChange={(e) => setScanLimit(Number(e.target.value))}
+                    className="px-4 py-2.5 bg-dark-800 border border-white/[0.08] rounded-xl text-[13px] text-neutral-300 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                  >
+                    <option value={10}>10 emails (Recommended)</option>
+                    <option value={25}>25 emails</option>
+                    <option value={50}>50 emails</option>
+                  </select>
+
+                  <button
+                    onClick={handleScan}
+                    disabled={loading}
+                    className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:shadow-lg hover:shadow-primary-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-[13px] font-semibold"
+                  >
+                    {loading ? (
+                      <>
+                        <RefreshCw size={18} className="animate-spin" />
+                        <span>Analyzing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Rocket size={18} />
+                        <span>Analyze Inbox</span>
+                      </>
+                    )}
+                  </button>
+
+                  {selectedIds.length > 0 && (
+                    <button
+                      onClick={handleDelete}
+                      className="flex items-center gap-2 px-5 py-2.5 bg-red-500/10 text-red-400 rounded-xl hover:bg-red-500/15 transition-all text-[13px] font-semibold border border-red-500/20"
+                    >
+                      <Trash2 size={18} />
+                      <span>Delete ({selectedIds.length})</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Stats Cards */}
+              <StatsCards
+                totalScanned={totalScanned}
+                avgConfidence={avgConfidence}
+                metrics={enhancedMetrics}
+              />
+
+              {/* 2-Column Layout: Email List + Details */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                {/* Email List - 2/3 width */}
+                <div className="lg:col-span-2">
+                  <EmailList
+                    emails={filteredEmails}
+                    selectedIds={selectedIds}
+                    onToggleSelect={handleToggleSelect}
+                    selectedEmail={selectedEmail}
+                    setSelectedEmail={setSelectedEmail}
+                    filterCategory={filterCategory}
+                    setFilterCategory={setFilterCategory}
+                  />
+                </div>
+
+                {/* Email Details - 1/3 width */}
+                <div className="lg:col-span-1">
+                  <EmailDetails
+                    selectedEmail={selectedEmail}
+                    setSelectedEmail={setSelectedEmail}
+                    onToggleSelect={handleToggleSelect}
+                    selectedIds={selectedIds}
+                    onDelete={handleDelete}
+                    onArchive={handleArchive}
+                  />
+                </div>
+              </div>
             </div>
-            <div className="flex-1">
-              <h4 className="text-[12px] font-semibold text-amber-300 mb-0.5">Gmail API Rate Limits</h4>
-              <p className="text-[11px] text-neutral-400">
-                Start with 10 emails to avoid rate limits. Wait 30-60 seconds between scans if you hit limits.
-              </p>
-            </div>
-          </div>
-
-          {/* Page Header */}
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-xl font-bold text-neutral-100">Inbox Classification</h1>
-              <p className="text-neutral-500 mt-0.5 text-sm">
-                {searchQuery
-                  ? `Found ${filteredEmails.length} result${filteredEmails.length !== 1 ? 's' : ''} for "${searchQuery}"`
-                  : 'AI-powered email organization'
-                }
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2.5">
-              <select
-                value={scanLimit}
-                onChange={(e) => setScanLimit(Number(e.target.value))}
-                className="px-3 py-2 bg-dark-800 border border-white/[0.06] rounded-lg text-[12px] text-neutral-300 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
-              >
-                <option value={10}>10 emails (Recommended)</option>
-                <option value={25}>25 emails</option>
-                <option value={50}>50 emails</option>
-              </select>
-
-              <button
-                onClick={handleScan}
-                disabled={loading}
-                className="flex items-center gap-2 px-5 py-2 bg-primary-600/80 text-white rounded-lg hover:bg-primary-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-[13px] font-medium"
-              >
-                {loading ? (
-                  <>
-                    <RefreshCw size={16} className="animate-spin" />
-                    <span>Analyzing...</span>
-                  </>
-                ) : (
-                  <>
-                    <Rocket size={16} />
-                    <span>Analyze Inbox</span>
-                  </>
-                )}
-              </button>
-
-              {selectedIds.length > 0 && (
-                <button
-                  onClick={handleDelete}
-                  className="flex items-center gap-2 px-4 py-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/15 transition-all text-[13px] font-medium"
-                >
-                  <Trash2 size={16} />
-                  <span>Delete ({selectedIds.length})</span>
-                </button>
+          ) : activeView === 'analytics' ? (
+            <>
+              <Analytics activeAccount={activeAccount} />
+              
+              {emails.length > 0 && (
+                <AIInsightsDashboard emails={emails} metrics={enhancedMetrics} />
               )}
-            </div>
-          </div>
-
-          {/* Stats Cards */}
-          <StatsCards
-            totalScanned={totalScanned}
-            avgConfidence={avgConfidence}
-            metrics={metrics}
-          />
-
-          {/* Email Table */}
-          <EmailTableEnhanced
-            emails={filteredEmails}
-            selectedIds={selectedIds}
-            onToggleSelect={handleToggleSelect}
-            onToggleSelectAll={handleToggleSelectAll}
-            onDelete={handleDelete}
-            onArchive={handleArchive}
-            searchQuery={searchQuery}
-          />
-
-          {/* AI Insights Dashboard */}
-          {emails.length > 0 && (
-            <div className="mt-6">
-              <AIInsightsDashboard emails={emails} metrics={metrics} />
-            </div>
-          )}
-        </div>
-      ) : activeView === 'analytics' ? (
-        <Analytics activeAccount={activeAccount} />
-      ) : activeView === 'settings' ? (
-        <Settings />
-      ) : null}
-    </Layout>
+            </>
+          ) : activeView === 'settings' ? (
+            <Settings />
+          ) : null}
+        </main>
+      </div>
+    </div>
   );
 }
 

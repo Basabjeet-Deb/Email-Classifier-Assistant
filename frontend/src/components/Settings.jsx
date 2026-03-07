@@ -1,16 +1,51 @@
-import { useState } from 'react';
-import { Save, RefreshCw, Database, Zap, Shield } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Save, RefreshCw, Database, Zap, Shield, TrendingUp } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { emailAPI } from '../api/client';
 
 export const Settings = () => {
   const [retraining, setRetraining] = useState(false);
+  const [metrics, setMetrics] = useState(null);
+  const [feedbackStats, setFeedbackStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchMetrics();
+    fetchFeedbackStats();
+  }, []);
+
+  const fetchMetrics = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/metrics');
+      const data = await response.json();
+      setMetrics(data.metrics);
+    } catch (error) {
+      console.error('Failed to fetch metrics:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchFeedbackStats = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/feedback/stats');
+      const data = await response.json();
+      setFeedbackStats(data.stats);
+    } catch (error) {
+      console.error('Failed to fetch feedback stats:', error);
+    }
+  };
 
   const handleRetrain = async () => {
     setRetraining(true);
     try {
       await emailAPI.retrainTfidf();
       toast.success('Model retrained successfully!');
+      // Refresh metrics after retraining
+      setTimeout(() => {
+        fetchMetrics();
+        fetchFeedbackStats();
+      }, 1000);
     } catch (error) {
       toast.error('Failed to retrain model');
     } finally {
@@ -18,11 +53,14 @@ export const Settings = () => {
     }
   };
 
+  const avgConfidence = metrics ? (metrics.average_confidence * 100).toFixed(1) : '...';
+  const emailsProcessed = metrics?.emails_processed || 0;
+
   return (
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-neutral-100">Settings</h1>
-        <p className="text-neutral-500 mt-1 text-sm">Manage your email classifier settings</p>
+        <p className="text-neutral-500 mt-1 text-sm">Configure your email classifier</p>
       </div>
 
       {/* ML Model Settings */}
@@ -41,10 +79,18 @@ export const Settings = () => {
           <div className="flex items-center justify-between p-3.5 bg-white/[0.02] rounded-lg border border-white/[0.04]">
             <div>
               <p className="text-[13px] font-medium text-neutral-200">Confidence Threshold</p>
-              <p className="text-[11px] text-neutral-500 mt-0.5">Current: 70% (High accuracy mode)</p>
+              <p className="text-[11px] text-neutral-500 mt-0.5">
+                Current: {loading ? 'Loading...' : `${avgConfidence}%`} (Avg from {emailsProcessed} emails)
+              </p>
             </div>
-            <span className="px-2.5 py-1 bg-emerald-500/15 text-emerald-400 rounded-md text-[11px] font-medium">
-              Active
+            <span className={`px-2.5 py-1 rounded-md text-[11px] font-medium ${
+              avgConfidence >= 75 
+                ? 'bg-emerald-500/15 text-emerald-400' 
+                : avgConfidence >= 60 
+                ? 'bg-amber-500/15 text-amber-400'
+                : 'bg-red-500/15 text-red-400'
+            }`}>
+              {avgConfidence >= 75 ? 'Excellent' : avgConfidence >= 60 ? 'Good' : 'Needs Training'}
             </span>
           </div>
 
@@ -65,6 +111,21 @@ export const Settings = () => {
               Protected
             </span>
           </div>
+
+          {/* Self-Learning Stats */}
+          {feedbackStats && (
+            <div className="flex items-center justify-between p-3.5 bg-blue-500/[0.04] rounded-lg border border-blue-500/10">
+              <div>
+                <p className="text-[13px] font-medium text-neutral-200">Self-Learning Progress</p>
+                <p className="text-[11px] text-neutral-500 mt-0.5">
+                  {feedbackStats.total_samples} feedback samples collected
+                </p>
+              </div>
+              <span className="px-2.5 py-1 bg-blue-500/15 text-blue-400 rounded-md text-[11px] font-medium">
+                {feedbackStats.samples_until_retrain} until auto-retrain
+              </span>
+            </div>
+          )}
 
           <button
             onClick={handleRetrain}

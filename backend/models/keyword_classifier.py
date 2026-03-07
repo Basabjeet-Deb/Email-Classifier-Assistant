@@ -7,75 +7,73 @@ from backend.config import CATEGORIES
 
 class KeywordClassifier:
     """
-    Fast rule-based classifier using keyword matching and domain recognition.
-    Provides high-confidence predictions for obvious cases.
+    Fast rule-based classifier using keyword matching for intent detection.
+    Focuses on email importance and purpose rather than topic.
     """
     
     def __init__(self):
-        """Initialize keyword sets and domain mappings."""
-        self.banking_keywords = [
-            'account statement', 'transaction', 'balance', 'credit card', 'debit card',
-            'payment', 'netbanking', 'upi', 'neft', 'rtgs', 'imps',
-            'account alert', 'credited', 'debited', 'withdrawal', 'deposit',
-            'statement for', 'minimum balance', 'overdraft', 'loan', 'emi', 'interest',
-            'bank account', 'savings account', 'current account', 'fixed deposit',
-            'mutual fund', 'investment', 'cheque', 'atm', 'card blocked', 'otp'
+        """Initialize keyword sets for intent detection."""
+        # Important - Requires immediate attention
+        self.important_keywords = [
+            'urgent', 'important', 'action required', 'immediate', 'asap',
+            'deadline', 'expires', 'expiring', 'interview', 'job offer',
+            'security alert', 'account locked', 'suspended', 'verification required',
+            'password reset', 'critical', 'emergency', 'attention needed',
+            'review required', 'approval needed', 'response needed',
+            'meeting scheduled', 'project deadline', 'client meeting',
+            'offer letter', 'employment', 'hiring'
         ]
         
-        self.banking_domains = [
-            'bank', 'sbi', 'hdfc', 'icici', 'axis', 'kotak', 'paytm', 
-            'phonepe', 'gpay', 'citi', 'hsbc', 'pnb', 'canara', 'idbi'
+        # Transactional - Receipts, confirmations, statements
+        self.transactional_keywords = [
+            'receipt', 'invoice', 'order confirmation', 'payment successful',
+            'transaction', 'statement', 'shipped', 'delivered', 'tracking',
+            'booking confirmed', 'reservation', 'ticket', 'confirmation number',
+            'order #', 'transaction id', 'payment processed', 'refund',
+            'order placed', 'order status', 'delivery update'
         ]
         
-        self.shopping_keywords = [
-            'order confirmation', 'receipt', 'invoice', 'shipped', 'delivery',
-            'tracking', 'your order', 'purchase', 'payment successful', 'order placed',
-            'dispatched', 'out for delivery', 'delivered', 'order #', 'order number',
-            'thank you for your order', 'shipment', 'package', 'courier', 'tracking number',
-            'order has been', 'order status', 'order update', 'estimated delivery'
+        self.transactional_domains = [
+            'amazon', 'flipkart', 'myntra', 'swiggy', 'zomato',
+            'bank', 'sbi', 'hdfc', 'icici', 'axis', 'paytm'
         ]
         
-        self.shopping_domains = [
-            'amazon', 'flipkart', 'myntra', 'swiggy', 'zomato', 'uber', 
-            'ola', 'ebay', 'shopify', 'meesho', 'ajio', 'nykaa'
-        ]
-        
-        self.work_keywords = [
-            'meeting scheduled', 'interview invitation', 'job application', 'resume shortlisted',
-            'position available', 'hiring for', 'recruitment process', 'linkedin connection',
-            'project deadline', 'task assigned', 'team meeting', 'colleague request',
-            'conference call', 'job alert', 'job opening', 'candidate profile'
-        ]
-        
-        self.work_domains = [
-            'linkedin', 'naukri', 'indeed', 'glassdoor', 'angellist', 'internshala'
-        ]
-        
+        # Promotional - Marketing, sales, offers
         self.promotional_keywords = [
-            'special offer', 'discount', 'sale ends', 'limited time', 'offer expires',
-            'buy now', 'shop now', 'deal of', 'save up to', 'free trial', 'subscribe now',
-            'exclusive offer', 'promotional', 'advertisement', '% off', 'claim your',
-            'dont miss', "don't miss", 'last chance', 'hurry up', 'act now', 'limited offer',
-            'flash sale', 'clearance sale', 'mega sale', 'biggest sale', 'promo code',
-            'limited stock', 'while supplies last', 'today only', 'ends soon', 'ends today'
+            'sale', 'discount', 'offer', 'deal', 'save', 'off',
+            'limited time', 'exclusive', 'special', 'promotion',
+            'flash sale', 'clearance', 'buy now', 'shop now',
+            'subscribe', 'upgrade', 'free trial', 'limited stock',
+            'best price', 'hot deal', 'mega sale', 'seasonal'
         ]
         
-        self.personal_domains = [
-            'soundcloud', 'spotify', 'youtube', 'perplexity', 'adobe', 'medium',
-            'substack', 'honeygain', 'facebook', 'twitter', 'instagram',
-            'coursera', 'udemy', 'edx', 'claude', 'canva', 'notion', 'figma'
+        # Social - Social network notifications
+        self.social_keywords = [
+            'commented', 'liked', 'shared', 'tagged', 'mentioned',
+            'follower', 'connection request', 'friend request',
+            'new message', 'replied', 'reacted', 'viewed your profile',
+            'wants to connect', 'endorsed', 'group invitation'
         ]
         
-        self.personal_keywords = [
-            'newsletter from', 'weekly digest', 'monthly update', 'whats new in', "what's new in",
-            'new feature', 'product update', 'introducing our', 'update from',
-            'learn from', 'learn about', 'educational content', 'online course'
+        self.social_domains = [
+            'linkedin', 'facebook', 'twitter', 'instagram',
+            'reddit', 'quora', 'medium', 'github'
+        ]
+        
+        # Spam - Scams, phishing, suspicious
+        self.spam_keywords = [
+            'won', 'winner', 'lottery', 'prize', 'claim', 'congratulations',
+            'free money', 'get rich', 'inheritance', 'nigerian prince',
+            'click here', 'verify account', 'suspended account',
+            'urgent verification', 'claim reward', 'you\'ve been selected',
+            'free gift card', 'work from home', 'earn thousands',
+            'prince needs help', 'nigerian', 'foreign prince'
         ]
     
     def classify(self, subject: str, sender: str, body_snippet: str, 
                  sender_domain: str) -> Tuple[str, float, List[str]]:
         """
-        Classify email using keyword matching.
+        Classify email intent using keyword matching with improved confidence scoring.
         
         Args:
             subject: Email subject
@@ -87,47 +85,69 @@ class KeywordClassifier:
             Tuple of (category, confidence, matched_keywords) or (None, 0.0, [])
         """
         combined_text = f"{subject} {body_snippet}".lower()
-        sender_lower = sender.lower()
         
-        # Check personal/content platform domains first
-        has_personal_domain = any(domain in sender_domain for domain in self.personal_domains)
-        if has_personal_domain:
-            promo_matches = [kw for kw in self.promotional_keywords if kw in combined_text]
-            if promo_matches and len(promo_matches) >= 2:
-                return "Promotional", 0.90, promo_matches
-            else:
-                return "Personal/Other", 0.92, []
+        # Priority 1: Check for spam (highest priority for safety)
+        spam_matches = [kw for kw in self.spam_keywords if kw in combined_text]
+        if len(spam_matches) >= 1:  # Even single strong spam indicator
+            # Higher confidence with more matches
+            confidence = min(0.90 + len(spam_matches) * 0.02, 0.98)
+            return "Spam", confidence, spam_matches
         
-        # Banking/Financial (highest priority)
-        banking_matches = [kw for kw in self.banking_keywords if kw in combined_text]
-        has_banking_domain = any(domain in sender_domain for domain in self.banking_domains)
-        if banking_matches or has_banking_domain:
-            confidence = 0.98 if (banking_matches and has_banking_domain) else 0.92 if banking_matches else 0.88
-            return "Banking/Financial", confidence, banking_matches
-        
-        # Shopping/Orders
-        shopping_matches = [kw for kw in self.shopping_keywords if kw in combined_text]
-        has_shopping_domain = any(domain in sender_domain for domain in self.shopping_domains)
-        if shopping_matches or has_shopping_domain:
-            confidence = 0.96 if (shopping_matches and has_shopping_domain) else 0.90 if shopping_matches else 0.85
-            return "Shopping/Orders", confidence, shopping_matches
-        
-        # Work/Career
-        work_matches = [kw for kw in self.work_keywords if kw in combined_text]
-        has_work_domain = any(domain in sender_domain for domain in self.work_domains)
-        if work_matches or has_work_domain:
-            confidence = 0.94 if (work_matches and has_work_domain) else 0.88 if work_matches else 0.82
-            return "Work/Career", confidence, work_matches
-        
-        # Promotional
+        # Priority 2: Check for promotional content (before important to catch marketing)
         promo_matches = [kw for kw in self.promotional_keywords if kw in combined_text]
-        if promo_matches:
-            return "Promotional", 0.91, promo_matches
+        # Check if "offer" is in context of job offer (important) vs promotional offer
+        has_job_context = any(kw in combined_text for kw in ['job', 'employment', 'hiring', 'career', 'position'])
         
-        # Personal/Other
-        personal_matches = [kw for kw in self.personal_keywords if kw in combined_text]
-        if personal_matches:
-            return "Personal/Other", 0.85, personal_matches
+        if len(promo_matches) >= 2 and not has_job_context:  # Need multiple promo indicators
+            # Scale confidence with number of matches
+            confidence = min(0.85 + (len(promo_matches) - 2) * 0.02, 0.94)
+            return "Promotional", confidence, promo_matches
+        
+        # Priority 3: Check for important/urgent emails
+        important_matches = [kw for kw in self.important_keywords if kw in combined_text]
+        if important_matches:
+            # Scale confidence based on number of matches
+            if len(important_matches) >= 3:
+                confidence = 0.95
+            elif len(important_matches) >= 2:
+                confidence = 0.90
+            else:
+                confidence = 0.85
+            return "Important", confidence, important_matches
+        
+        # Priority 4: Check for transactional emails
+        # But skip if promotional keywords are present (e.g., "SBI credit card offer")
+        transactional_matches = [kw for kw in self.transactional_keywords if kw in combined_text]
+        has_transactional_domain = any(domain in sender_domain for domain in self.transactional_domains)
+        
+        # Don't classify as transactional if promotional keywords exist
+        if (transactional_matches or has_transactional_domain) and len(promo_matches) == 0:
+            # Best confidence when both keywords and domain match
+            if transactional_matches and has_transactional_domain:
+                confidence = min(0.92 + len(transactional_matches) * 0.01, 0.96)
+            elif len(transactional_matches) >= 2:
+                confidence = 0.88
+            elif transactional_matches:
+                confidence = 0.85
+            else:
+                confidence = 0.82
+            return "Transactional", confidence, transactional_matches
+        
+        # Priority 5: Check for social notifications
+        social_matches = [kw for kw in self.social_keywords if kw in combined_text]
+        has_social_domain = any(domain in sender_domain for domain in self.social_domains)
+        
+        if social_matches or has_social_domain:
+            # Best confidence when both keywords and domain match
+            if social_matches and has_social_domain:
+                confidence = min(0.90 + len(social_matches) * 0.01, 0.95)
+            elif len(social_matches) >= 2:
+                confidence = 0.86
+            elif social_matches:
+                confidence = 0.83
+            else:
+                confidence = 0.80
+            return "Social", confidence, social_matches
         
         # No match
         return None, 0.0, []

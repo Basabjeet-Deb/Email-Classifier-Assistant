@@ -2,11 +2,11 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recha
 import { BarChart3 } from 'lucide-react';
 
 const COLORS = {
-  'Banking/Financial': '#10b981',
-  'Shopping/Orders': '#3b82f6',
-  'Work/Career': '#06b6d4',
+  'Important': '#ef4444',
+  'Transactional': '#3b82f6',
   'Promotional': '#f59e0b',
-  'Personal/Other': '#6b7280',
+  'Social': '#06b6d4',
+  'Spam': '#6b7280',
 };
 
 export const CategoryDistributionChart = ({ emails, metrics }) => {

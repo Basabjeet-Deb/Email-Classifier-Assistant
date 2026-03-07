@@ -16,6 +16,10 @@ email_analytics.db
 *.db
 *.db-journal
 
+# Large data files
+combined_data.csv
+email_intent_dataset_5000.csv
+
 # Python
 __pycache__/
 *.py[cod]
@@ -57,7 +61,8 @@ Thumbs.db
 .cache/
 transformers_cache/
 tfidf_model.pkl
-*.pkl
+# Allow the main trained model
+!models/tfidf_classifier.pkl
 
 # Cleanup files
 CLEANUP_SUMMARY.txt
