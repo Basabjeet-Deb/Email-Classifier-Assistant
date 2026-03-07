@@ -130,8 +130,12 @@ export const Analytics = ({ activeAccount }) => {
                 cx="50%"
                 cy="50%"
                 outerRadius={95}
-                label
-                stroke="rgba(0,0,0,0.3)"
+                label={{
+                  fill: '#e5e7eb',
+                  fontSize: 14,
+                  fontWeight: 600
+                }}
+                stroke="rgba(0,0,0,0.5)"
                 strokeWidth={2}
               >
                 {safeAnalytics.category_distribution.map((entry, index) => (
