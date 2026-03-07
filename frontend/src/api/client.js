@@ -28,6 +28,9 @@ export const emailAPI = {
   // New OAuth flow
   startAuth: () => api.get('/auth/login'),
   
+  // Feedback submission
+  submitFeedback: (data) => api.post('/feedback', data),
+  
   // Legacy endpoint (deprecated)
   authenticate: () => api.post('/auth'),
 };

@@ -37,12 +37,27 @@ def init_database():
         )
     ''')
     
+    # Create feedback table for user corrections
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS feedback (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email_id TEXT NOT NULL,
+            predicted_category TEXT NOT NULL,
+            correct_category TEXT NOT NULL,
+            email_text TEXT,
+            confidence REAL,
+            classifier_used TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
     # Create indexes for faster queries
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_account ON classifications(account_id)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_category ON classifications(category)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_timestamp ON classifications(timestamp)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_date ON classifications(date_only)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_sender ON classifications(sender_domain)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_feedback_email ON feedback(email_id)')
     
     conn.commit()
     conn.close()
@@ -303,3 +318,20 @@ def get_insights(account_id: str) -> List[str]:
 
 # Initialize database on module import
 init_database()
+
+
+def store_feedback(email_id: str, predicted_category: str, correct_category: str, 
+                   email_text: str, confidence: float = 0.0, classifier_used: str = "Unknown"):
+    """Store user feedback for classification corrections."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        INSERT INTO feedback 
+        (email_id, predicted_category, correct_category, email_text, confidence, classifier_used)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (email_id, predicted_category, correct_category, email_text, confidence, classifier_used))
+    
+    conn.commit()
+    conn.close()
+    print(f"Feedback stored: {email_id} - {predicted_category} -> {correct_category}")

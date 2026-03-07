@@ -54,6 +54,14 @@ class ScanRequest(BaseModel):
     max_results: int = 50
     query: str = "in:inbox category:promotions OR is:unread"
 
+class FeedbackRequest(BaseModel):
+    email_id: str
+    predicted_category: str
+    correct_category: str
+    email_text: str
+    confidence: float = 0.0
+    classifier_used: str = "Unknown"
+
 @app.get("/")
 def read_index():
     """Serves the main dashboard HTML."""
@@ -69,18 +77,22 @@ def read_index():
 @app.get("/api/status")
 def get_status():
     """Check which backend accounts are connected to Gmail."""
-    try:
-        connected_accounts = email_core.get_all_accounts_from_db()
-        print(f"Connected accounts from database: {connected_accounts}")
-        
-        if connected_accounts:
-            return {"status": "connected", "accounts": connected_accounts}
-        return {"status": "disconnected", "accounts": []}
-    except Exception as e:
-        print(f"ERROR in get_status: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return {"status": "error", "accounts": [], "error": str(e)}
+    # Look for anything named token_*.json in our directory
+    connected_accounts = []
+    for file in os.listdir(BASE_DIR):
+        if file.startswith("token_") and file.endswith(".json"):
+            # strip "token_" and ".json"
+            acc_name = file[6:-5]
+            if acc_name != "default":
+                connected_accounts.append(acc_name)
+    
+    # Check default if no explicit emails found
+    if not connected_accounts and os.path.exists(os.path.join(BASE_DIR, "token_default.json")):
+        connected_accounts.append("default")
+
+    if connected_accounts:
+        return {"status": "connected", "accounts": connected_accounts}
+    return {"status": "disconnected", "accounts": []}
 
 @app.get("/api/auth/login")
 def auth_login():
@@ -133,10 +145,12 @@ def auth_callback(code: str, state: str = None):
         profile = service.users().getProfile(userId='me').execute()
         email_address = profile.get('emailAddress', 'default')
         
-        # Save credentials to database (persistent storage)
-        email_core.save_token_to_db(email_address, creds)
+        # Save credentials
+        token_path = os.path.join(BASE_DIR, f'token_{email_address}.json')
+        with open(token_path, 'w') as token:
+            token.write(creds.to_json())
         
-        print(f"Successfully authenticated and saved to database: {email_address}")
+        print(f"Successfully authenticated: {email_address}")
         
         # Redirect back to frontend with success
         from fastapi.responses import RedirectResponse
@@ -163,31 +177,20 @@ def auth_new_account():
 @app.post("/api/scan")
 def scan_emails(req: ScanRequest):
     """Triggers the inbox scanner. Uses TF-IDF + LogReg as primary classifier."""
-    print(f"Scan request received for account: {req.account_id}")
-    
     service = email_core.authenticate_gmail(req.account_id)
     if not service:
-        print(f"Authentication failed for account: {req.account_id}")
-        print(f"Available token files: {[f for f in os.listdir(BASE_DIR) if f.startswith('token_')]}")
-        raise HTTPException(status_code=401, detail=f"Failed to authenticate with Gmail for {req.account_id}. Please re-authenticate.")
+        raise HTTPException(status_code=401, detail=f"Failed to authenticate with Gmail for {req.account_id}.")
     
     try:
-        print(f"Starting email processing for {req.account_id}...")
         result = email_core.process_emails(
             service, 
             max_results=req.max_results, 
             query=req.query
         )
         
-        print(f"Email processing complete. Storing in database...")
         # Store classifications in database for analytics
         db.store_batch_classifications(req.account_id, result['emails'])
         
-        # CRITICAL: Unload ML models after scan to free memory for next request
-        print("Unloading ML models to free memory...")
-        email_core.unload_ml_models()
-        
-        print(f"Scan successful: {result['total_count']} emails processed")
         return {
             "status": "success",
             "processed_count": result['total_count'],
@@ -199,8 +202,6 @@ def scan_emails(req: ScanRequest):
         import traceback
         print(f"ERROR in scan_emails: {str(e)}")
         print(traceback.format_exc())
-        # Unload models even on error
-        email_core.unload_ml_models()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/delete")
@@ -255,6 +256,39 @@ def retrain_tfidf():
     """Retrain the TF-IDF classifier using historical data from database."""
     try:
         success = email_core.retrain_tfidf_from_database()
+        if success:
+            return {
+                "status": "success",
+                "message": "TF-IDF classifier retrained successfully using historical data"
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to retrain classifier")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/feedback")
+def submit_feedback(request: FeedbackRequest):
+    """Store user feedback for classification corrections."""
+    try:
+        # Store feedback in database for future model improvements
+        db.store_feedback(
+            email_id=request.email_id,
+            predicted_category=request.predicted_category,
+            correct_category=request.correct_category,
+            email_text=request.email_text,
+            confidence=request.confidence,
+            classifier_used=request.classifier_used
+        )
+        
+        return {
+            "status": "success",
+            "message": "Feedback received. Thank you for helping improve the classifier!"
+        }
+    except Exception as e:
+        import traceback
+        print(f"ERROR in submit_feedback: {str(e)}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
         if success:
             return {
                 "status": "success",

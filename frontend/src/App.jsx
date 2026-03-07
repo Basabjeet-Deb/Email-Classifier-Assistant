@@ -5,7 +5,8 @@ import toast from 'react-hot-toast';
 import { LandingPage } from './components/LandingPage';
 import { Layout } from './components/Layout';
 import { StatsCards } from './components/StatsCards';
-import { EmailTableModern } from './components/EmailTableModern';
+import { EmailTableEnhanced } from './components/EmailTableEnhanced';
+import { AIInsightsDashboard } from './components/AIInsightsDashboard';
 import { Analytics } from './components/Analytics';
 import { Settings } from './components/Settings';
 import { useEmails } from './hooks/useEmails';
@@ -337,7 +338,7 @@ function AppContent() {
           />
 
           {/* Email Table */}
-          <EmailTableModern
+          <EmailTableEnhanced
             emails={filteredEmails}
             selectedIds={selectedIds}
             onToggleSelect={handleToggleSelect}
@@ -346,6 +347,13 @@ function AppContent() {
             onArchive={handleArchive}
             searchQuery={searchQuery}
           />
+
+          {/* AI Insights Dashboard */}
+          {emails.length > 0 && (
+            <div className="mt-6">
+              <AIInsightsDashboard emails={emails} metrics={metrics} />
+            </div>
+          )}
         </div>
       ) : activeView === 'analytics' ? (
         <Analytics activeAccount={activeAccount} />
