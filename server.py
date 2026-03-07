@@ -27,7 +27,7 @@ if __name__ == "__main__":
     host = "0.0.0.0" if ENVIRONMENT == "production" else "127.0.0.1"
     
     uvicorn.run(
-        "server_v2:app",
+        "server:app",
         host=host,
         port=PORT,
         reload=(ENVIRONMENT == "development")
