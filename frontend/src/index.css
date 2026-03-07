@@ -831,3 +831,19 @@ button, a, .transition-all {
     opacity: 0.2;
   }
 }
+
+/* Force pie chart labels to be white */
+.recharts-pie-label-text {
+  fill: #ffffff !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
+}
+
+/* Force all recharts text to be visible */
+.recharts-text {
+  fill: #9ca3af !important;
+}
+
+.recharts-pie-label-text {
+  fill: #ffffff !important;
+}

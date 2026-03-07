@@ -9,8 +9,28 @@ const darkTooltipStyle = {
   backgroundColor: '#1f1f27',
   border: '1px solid rgba(255,255,255,0.2)',
   borderRadius: '8px',
-  color: '#e0ddd6',
+  color: '#ffffff',  // White text in tooltip
   fontSize: '12px',
+};
+
+const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, name, value }) => {
+  const RADIAN = Math.PI / 180;
+  const radius = outerRadius + 25;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+  return (
+    <text 
+      x={x} 
+      y={y} 
+      fill="#ffffff" 
+      textAnchor={x > cx ? 'start' : 'end'} 
+      dominantBaseline="central"
+      style={{ fontSize: '14px', fontWeight: 600 }}
+    >
+      {`${name}: ${value}`}
+    </text>
+  );
 };
 
 export const Analytics = ({ activeAccount }) => {
@@ -130,19 +150,15 @@ export const Analytics = ({ activeAccount }) => {
                 cx="50%"
                 cy="50%"
                 outerRadius={95}
-                label={{
-                  fill: '#e5e7eb',
-                  fontSize: 14,
-                  fontWeight: 600
-                }}
-                stroke="rgba(0,0,0,0.5)"
+                label={renderCustomLabel}
+                labelLine={{ stroke: '#ffffff' }}
+                stroke="rgba(255, 255, 255, 0.5)"
                 strokeWidth={2}
               >
                 {safeAnalytics.category_distribution.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip contentStyle={darkTooltipStyle} />
             </PieChart>
           </ResponsiveContainer>
         </div>
