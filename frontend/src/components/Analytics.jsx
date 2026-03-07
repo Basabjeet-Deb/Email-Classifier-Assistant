@@ -2,11 +2,12 @@ import { useAnalytics } from '../hooks/useAnalytics';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { StatCard } from './StatCard';
 
-const COLORS = ['#d4832e', '#3b82f6', '#8b5cf6', '#ef4444', '#10b981'];
+// Brighter, more visible colors for dark theme
+const COLORS = ['#f59e0b', '#3b82f6', '#a78bfa', '#ef4444', '#10b981'];
 
 const darkTooltipStyle = {
   backgroundColor: '#1f1f27',
-  border: '1px solid rgba(255,255,255,0.06)',
+  border: '1px solid rgba(255,255,255,0.2)',
   borderRadius: '8px',
   color: '#e0ddd6',
   fontSize: '12px',
@@ -147,11 +148,11 @@ export const Analytics = ({ activeAccount }) => {
           <h3 className="text-sm font-semibold text-neutral-200 mb-4">Daily Trend</h3>
           <ResponsiveContainer width="100%" height={280}>
             <LineChart data={safeAnalytics.daily_trend}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-              <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#706961' }} />
-              <YAxis tick={{ fontSize: 11, fill: '#706961' }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+              <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#9ca3af' }} />
+              <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} />
               <Tooltip contentStyle={darkTooltipStyle} />
-              <Line type="monotone" dataKey="count" stroke="#d4832e" strokeWidth={2} dot={{ fill: '#d4832e', r: 3 }} />
+              <Line type="monotone" dataKey="count" stroke="#f59e0b" strokeWidth={3} dot={{ fill: '#f59e0b', r: 4 }} />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -161,11 +162,11 @@ export const Analytics = ({ activeAccount }) => {
           <h3 className="text-sm font-semibold text-neutral-200 mb-4">Emails by Hour</h3>
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={safeAnalytics.emails_by_hour.map((count, hour) => ({ hour: `${hour}:00`, count }))}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-              <XAxis dataKey="hour" tick={{ fontSize: 10, fill: '#706961' }} />
-              <YAxis tick={{ fontSize: 11, fill: '#706961' }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+              <XAxis dataKey="hour" tick={{ fontSize: 10, fill: '#9ca3af' }} />
+              <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} />
               <Tooltip contentStyle={darkTooltipStyle} />
-              <Bar dataKey="count" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -178,11 +179,11 @@ export const Analytics = ({ activeAccount }) => {
               day,
               count: safeAnalytics.emails_by_day[i]
             }))}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-              <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#706961' }} />
-              <YAxis tick={{ fontSize: 11, fill: '#706961' }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+              <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#9ca3af' }} />
+              <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} />
               <Tooltip contentStyle={darkTooltipStyle} />
-              <Bar dataKey="count" fill="#8b5cf6" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="count" fill="#a78bfa" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
