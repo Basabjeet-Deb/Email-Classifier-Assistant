@@ -89,47 +89,275 @@ Combines machine learning with rule-based validation for improved accuracy:
 
 ## 🏗️ System Architecture
 
+### High-Level Architecture Diagram
+
+```mermaid
+graph TB
+    subgraph "Frontend Layer"
+        UI[React UI]
+        Auth[Auth Component]
+        Inbox[Inbox Component]
+        Analytics[Analytics Dashboard]
+        Settings[Settings Panel]
+    end
+    
+    subgraph "API Gateway"
+        Router[FastAPI Router]
+    end
+    
+    subgraph "Backend Services"
+        AuthSvc[Auth Service]
+        EmailSvc[Email Service]
+        ClassSvc[Classification Service]
+        FeedbackSvc[Feedback Service]
+        AnalyticsSvc[Analytics Service]
+    end
+    
+    subgraph "ML Layer"
+        TfIdf[TF-IDF Classifier]
+        Keyword[Keyword Classifier]
+        Preprocessor[Text Preprocessor]
+    end
+    
+    subgraph "Data Layer"
+        DB[(SQLite DB)]
+        Cache[LRU Cache]
+        ModelFile[Trained Model]
+    end
+    
+    subgraph "External Services"
+        Gmail[Gmail API]
+    end
+    
+    UI --> Router
+    Auth --> Router
+    Inbox --> Router
+    Analytics --> Router
+    Settings --> Router
+    
+    Router --> AuthSvc
+    Router --> EmailSvc
+    Router --> ClassSvc
+    Router --> FeedbackSvc
+    Router --> AnalyticsSvc
+    
+    AuthSvc --> Gmail
+    EmailSvc --> Gmail
+    
+    ClassSvc --> TfIdf
+    ClassSvc --> Keyword
+    ClassSvc --> Cache
+    
+    TfIdf --> Preprocessor
+    TfIdf --> ModelFile
+    
+    FeedbackSvc --> DB
+    FeedbackSvc --> TfIdf
+    
+    AnalyticsSvc --> DB
+    
+    EmailSvc --> ClassSvc
+    
+    style UI fill:#61dafb
+    style Router fill:#009688
+    style TfIdf fill:#ff6b6b
+    style DB fill:#4caf50
+    style Gmail fill:#ea4335
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Frontend (React + Vite)                  │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  │
-│  │  Inbox   │  │Analytics │  │ Settings │  │ Feedback │  │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘  │
-└────────────────────────┬────────────────────────────────────┘
-                         │ HTTP/REST API
-                         ▼
-┌─────────────────────────────────────────────────────────────┐
-│              Backend (FastAPI + Python)                     │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │  API Layer: Authentication, Email Ops, Analytics     │  │
-│  └──────────────────────────────────────────────────────┘  │
-│         │                  │                  │             │
-│         ▼                  ▼                  ▼             │
-│  ┌────────────┐   ┌────────────┐   ┌────────────┐        │
-│  │   Gmail    │   │     ML     │   │  Database  │        │
-│  │    API     │   │  Pipeline  │   │  (SQLite)  │        │
-│  └────────────┘   └────────────┘   └────────────┘        │
-└─────────────────────────────────────────────────────────────┘
+
+### Email Classification Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant API
+    participant EmailService
+    participant Gmail
+    participant ClassificationService
+    participant MLModel
+    participant Cache
+    participant Database
+    
+    User->>Frontend: Click "Scan Emails"
+    Frontend->>API: POST /api/scan
+    API->>EmailService: fetch_emails()
+    EmailService->>Gmail: Get emails via OAuth
+    Gmail-->>EmailService: Return email list
+    
+    loop For each email
+        EmailService->>ClassificationService: classify_email()
+        ClassificationService->>Cache: Check cache
+        
+        alt Cache Hit
+            Cache-->>ClassificationService: Return cached result
+        else Cache Miss
+            ClassificationService->>MLModel: Preprocess & classify
+            MLModel-->>ClassificationService: Return prediction
+            ClassificationService->>Cache: Store result
+        end
+        
+        ClassificationService-->>EmailService: Classification result
+    end
+    
+    EmailService->>Database: Store classifications
+    EmailService-->>API: Return classified emails
+    API-->>Frontend: JSON response
+    Frontend-->>User: Display categorized emails
 ```
 
-### Component Breakdown
+### Self-Learning Feedback Loop
 
-**Frontend Layer**
-- React 18 with Vite for fast development
-- TanStack Query for efficient data fetching
-- Recharts for data visualization
-- Tailwind CSS for responsive design
+```mermaid
+flowchart TD
+    A[User Views Email] --> B{Classification Correct?}
+    B -->|Yes| C[Continue]
+    B -->|No| D[User Clicks Feedback]
+    
+    D --> E[Select Correct Category]
+    E --> F[Submit Feedback]
+    
+    F --> G[Store in feedback_dataset.csv]
+    G --> H[Increment Feedback Counter]
+    
+    H --> I{Counter >= 50?}
+    I -->|No| J[Wait for More Feedback]
+    I -->|Yes| K[Trigger Auto-Retraining]
+    
+    K --> L[Load Feedback Data]
+    L --> M[Combine with Original Dataset]
+    M --> N[Generate Synthetic Samples]
+    
+    N --> O[Preprocess All Data]
+    O --> P[Train TF-IDF Vectorizers]
+    P --> Q[Train LinearSVC Model]
+    Q --> R[Calibrate Probabilities]
+    
+    R --> S[Evaluate on Test Set]
+    S --> T[Save New Model]
+    T --> U[Restart Backend Service]
+    U --> V[Load Updated Model]
+    
+    V --> W[Reset Counter]
+    W --> J
+    
+    style D fill:#ff6b6b
+    style K fill:#4caf50
+    style T fill:#2196f3
+    style V fill:#ff9800
+```
 
-**Backend Layer**
-- FastAPI for high-performance API endpoints
-- Gmail API client for email operations
-- ML classification service with caching
-- Self-learning service for model retraining
+### ML Classification Pipeline
 
-**Data Layer**
-- SQLite for analytics and feedback storage
-- Trained model persistence (pickle format)
-- OAuth token management
+```mermaid
+flowchart LR
+    subgraph Input
+        Email[Raw Email]
+    end
+    
+    subgraph Preprocessing
+        Clean[HTML Removal]
+        Extract[Feature Extraction]
+        Normalize[Text Normalization]
+    end
+    
+    subgraph Feature Engineering
+        Domain[Domain Extraction]
+        Subject[Subject Weighting 3x]
+        Metadata[Metadata Tokens]
+        TfIdfWord[TF-IDF Word n-grams]
+        TfIdfChar[TF-IDF Char n-grams]
+    end
+    
+    subgraph Classification
+        Keyword[Keyword Classifier]
+        ML[LinearSVC Model]
+        Hybrid[Hybrid Decision Logic]
+    end
+    
+    subgraph Output
+        Category[Category Label]
+        Confidence[Confidence Score]
+    end
+    
+    Email --> Clean
+    Clean --> Extract
+    Extract --> Normalize
+    
+    Normalize --> Domain
+    Normalize --> Subject
+    Normalize --> Metadata
+    Normalize --> TfIdfWord
+    Normalize --> TfIdfChar
+    
+    Domain --> Keyword
+    Subject --> ML
+    Metadata --> ML
+    TfIdfWord --> ML
+    TfIdfChar --> ML
+    
+    Keyword --> Hybrid
+    ML --> Hybrid
+    
+    Hybrid --> Category
+    Hybrid --> Confidence
+    
+    style Email fill:#e3f2fd
+    style Hybrid fill:#4caf50
+    style Category fill:#ff9800
+    style Confidence fill:#ff9800
+```
+
+### Data Flow Architecture
+
+```mermaid
+graph LR
+    subgraph "User Interface"
+        Browser[Web Browser]
+    end
+    
+    subgraph "Frontend - React"
+        Components[UI Components]
+        Hooks[React Hooks]
+        APIClient[API Client]
+    end
+    
+    subgraph "Backend - FastAPI"
+        Routes[API Routes]
+        Services[Business Logic]
+        Models[ML Models]
+    end
+    
+    subgraph "Storage"
+        SQLite[(SQLite DB)]
+        ModelFiles[Model Files]
+        FeedbackCSV[Feedback CSV]
+    end
+    
+    subgraph "External"
+        GmailAPI[Gmail API]
+    end
+    
+    Browser <-->|HTTP/JSON| Components
+    Components <--> Hooks
+    Hooks <-->|REST API| APIClient
+    
+    APIClient <-->|HTTP| Routes
+    Routes --> Services
+    Services --> Models
+    
+    Services <-->|Read/Write| SQLite
+    Models <-->|Load| ModelFiles
+    Services <-->|Append| FeedbackCSV
+    
+    Services <-->|OAuth| GmailAPI
+    
+    style Browser fill:#61dafb
+    style Routes fill:#009688
+    style Models fill:#ff6b6b
+    style SQLite fill:#4caf50
+    style GmailAPI fill:#ea4335
+```
 
 ---
 
@@ -362,47 +590,154 @@ python retrain_robust_model.py
 
 ## 📁 Project Structure
 
+### Scalable Feature-Based Architecture
+
+The project follows a **domain-driven design** where each feature is self-contained, making it easy to scale, maintain, and potentially extract into microservices.
+
 ```
 Email-Classifier-Assistant/
 ├── backend/
-│   ├── api/
-│   │   └── routes.py              # API endpoints
-│   ├── models/
-│   │   ├── tfidf_classifier_robust.py  # Main ML model
-│   │   ├── keyword_classifier.py       # Rule-based classifier
-│   │   └── zero_shot_classifier.py     # Optional transformer
-│   ├── services/
-│   │   ├── classification_service.py   # Hybrid classification
-│   │   ├── gmail_service.py            # Gmail API integration
-│   │   └── self_learning_service.py    # Feedback & retraining
-│   ├── utils/
-│   │   ├── email_processor.py          # Feature extraction
-│   │   └── robust_preprocessor.py      # Text cleaning
-│   ├── caching/
-│   │   └── lru_cache.py                # Classification cache
-│   └── metrics/
-│       └── tracker.py                  # Performance tracking
+│   ├── core/                              # Core infrastructure
+│   │   ├── config.py                     # Application configuration
+│   │   ├── database.py                   # Database operations
+│   │   ├── cache.py                      # Caching layer (LRU)
+│   │   └── dependencies.py               # FastAPI dependencies
+│   │
+│   ├── features/                          # Feature modules (domain-driven)
+│   │   ├── auth/                         # 🔐 Authentication & OAuth
+│   │   │   ├── routes.py                # Auth API endpoints
+│   │   │   ├── service.py               # Gmail OAuth logic
+│   │   │   └── models.py                # Auth data models
+│   │   │
+│   │   ├── email/                        # 📧 Email Management
+│   │   │   ├── routes.py                # Email CRUD endpoints
+│   │   │   ├── service.py               # Gmail API integration
+│   │   │   ├── processor.py             # Email preprocessing
+│   │   │   └── models.py                # Email data models
+│   │   │
+│   │   ├── classification/               # 🤖 ML Classification
+│   │   │   ├── routes.py                # Classification endpoints
+│   │   │   ├── service.py               # Hybrid classification logic
+│   │   │   ├── models/                  # ML model implementations
+│   │   │   │   ├── tfidf_classifier.py  # TF-IDF + LinearSVC
+│   │   │   │   ├── keyword_classifier.py # Rule-based classifier
+│   │   │   │   └── zero_shot_classifier.py # Optional transformer
+│   │   │   ├── preprocessor.py          # Text preprocessing pipeline
+│   │   │   └── schemas.py               # Classification data schemas
+│   │   │
+│   │   ├── feedback/                     # 🔄 Feedback & Learning
+│   │   │   ├── routes.py                # Feedback API endpoints
+│   │   │   ├── service.py               # Self-learning logic
+│   │   │   ├── storage.py               # Feedback persistence
+│   │   │   └── retrainer.py             # Model retraining pipeline
+│   │   │
+│   │   └── analytics/                    # 📊 Analytics & Metrics
+│   │       ├── routes.py                # Analytics endpoints
+│   │       ├── service.py               # Analytics computation
+│   │       ├── tracker.py               # Performance tracking
+│   │       └── schemas.py               # Analytics data schemas
+│   │
+│   ├── shared/                            # Shared utilities
+│   │   ├── exceptions.py                 # Custom exception classes
+│   │   ├── logging.py                    # Logging configuration
+│   │   └── utils.py                      # Common helper functions
+│   │
+│   └── api/                               # API aggregation layer
+│       ├── __init__.py
+│       └── router.py                     # Main router (aggregates features)
+│
 ├── frontend/
 │   └── src/
-│       ├── components/
-│       │   ├── EmailTableEnhanced.jsx  # Main email view
-│       │   ├── Analytics.jsx           # Dashboard
-│       │   ├── EmailDetails.jsx        # Email viewer
-│       │   └── Settings.jsx            # Configuration
-│       ├── hooks/
-│       │   ├── useEmails.js            # Email data hook
-│       │   └── useAnalytics.js         # Analytics hook
-│       └── api/
-│           └── client.js               # API client
-├── models/
-│   └── tfidf_classifier.pkl            # Trained model
-├── data/
-│   └── feedback_dataset.csv            # User feedback
-├── server.py                            # Main entry point
-├── database.py                          # SQLite operations
-├── retrain_robust_model.py             # Training script
-├── requirements.txt                     # Python dependencies
-└── README.md                            # This file
+│       ├── features/                      # Feature-based frontend
+│       │   ├── auth/                     # Authentication UI
+│       │   ├── inbox/                    # Email list & management
+│       │   ├── analytics/                # Analytics dashboard
+│       │   └── settings/                 # Settings & configuration
+│       │
+│       ├── components/                    # Shared UI components
+│       │   ├── EmailTableEnhanced.jsx    # Main email table
+│       │   ├── EmailDetails.jsx          # Email detail view
+│       │   ├── Analytics.jsx             # Analytics charts
+│       │   └── Settings.jsx              # Settings panel
+│       │
+│       ├── hooks/                         # Custom React hooks
+│       │   ├── useEmails.js              # Email data management
+│       │   └── useAnalytics.js           # Analytics data
+│       │
+│       ├── api/                           # API client layer
+│       │   └── client.js                 # Axios HTTP client
+│       │
+│       └── shared/                        # Shared utilities
+│           ├── constants.js              # App constants
+│           └── helpers.js                # Helper functions
+│
+├── models/                                # Trained ML models
+│   └── tfidf_classifier.pkl              # Serialized model
+│
+├── data/                                  # Data storage
+│   └── feedback_dataset.csv              # User feedback data
+│
+├── scripts/                               # Utility scripts
+│   ├── retrain_model.py                  # Model retraining
+│   └── seed_data.py                      # Database seeding
+│
+├── tests/                                 # Test suite
+│   ├── unit/                             # Unit tests
+│   ├── integration/                      # Integration tests
+│   └── e2e/                              # End-to-end tests
+│
+├── docs/                                  # Documentation
+│   ├── API.md                            # API documentation
+│   ├── ARCHITECTURE.md                   # Architecture guide
+│   └── DEPLOYMENT.md                     # Deployment guide
+│
+├── server.py                              # Application entry point
+├── database.py                            # Database initialization
+├── requirements.txt                       # Python dependencies
+├── .env.example                           # Environment variables template
+└── README.md                              # This file
+```
+
+### Why This Structure?
+
+#### 🎯 **Feature-Based Organization**
+Each feature (auth, email, classification, feedback, analytics) is self-contained with its own:
+- API routes
+- Business logic (service layer)
+- Data models
+- Utilities
+
+#### 📈 **Scalability**
+- **Add new features easily**: Create a new folder under `features/`
+- **Microservices ready**: Each feature can become an independent service
+- **Team collaboration**: Different developers can work on different features
+
+#### 🔧 **Maintainability**
+- **Clear boundaries**: Related code stays together
+- **Easy navigation**: Find everything about a feature in one place
+- **Reduced coupling**: Features communicate through well-defined interfaces
+
+#### 🧪 **Testability**
+- **Feature-specific tests**: Tests live alongside the code they test
+- **Easy mocking**: Clear dependencies make testing straightforward
+- **Isolated testing**: Test features independently
+
+### Example: Adding a New Feature
+
+To add a "notifications" feature:
+
+```bash
+backend/features/notifications/
+├── routes.py          # Notification endpoints
+├── service.py         # Notification logic
+├── models.py          # Notification data models
+└── schemas.py         # Pydantic schemas
+```
+
+Then register in `backend/api/router.py`:
+```python
+from features.notifications.routes import router as notifications_router
+app.include_router(notifications_router, prefix="/api/notifications")
 ```
 
 ---
