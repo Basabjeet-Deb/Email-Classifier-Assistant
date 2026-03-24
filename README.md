@@ -111,9 +111,6 @@ Combines machine learning with rule-based validation for improved accuracy:
 │  └────────────┘   └────────────┘   └────────────┘        │
 └─────────────────────────────────────────────────────────────┘
 ```
-### 🪈PIPELINE DIAGRAM (click to look at Full View)
-<img width="10344" height="4946" alt="image" src="https://github.com/user-attachments/assets/cede5992-5f85-4d0d-997d-792f5af73d7a" />
-
 ### Component Breakdown
 
 **Frontend Layer**
