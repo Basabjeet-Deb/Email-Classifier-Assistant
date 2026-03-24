@@ -82,9 +82,6 @@ export const Navbar = ({ searchQuery, setSearchQuery }) => {
                 </span>
               )}
             </button>
-
-            {/* Notifications Dropdown */}
-            {showNotifications && createPortal(
               <>
                 <div
                   className="fixed inset-0 z-[9998]"
@@ -161,9 +158,7 @@ export const Navbar = ({ searchQuery, setSearchQuery }) => {
             )}
           </div>
 
-          {/* User Avatar */}
-          <div className="w-9 h-9 bg-gradient-to-br from-primary-500/70 to-primary-700/70 rounded-full flex items-center justify-center text-white text-sm font-semibold">
-            U
+            )}
           </div>
         </div>
       </div>
