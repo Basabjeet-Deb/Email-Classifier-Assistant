@@ -89,28 +89,123 @@ Combines machine learning with rule-based validation for improved accuracy:
 
 ## 🏗️ System Architecture
 
+### High-Level Architecture
+
+```mermaid
+graph TB
+    subgraph "Frontend Layer"
+        UI[React UI]
+        Auth[Auth Component]
+        Inbox[Inbox Component]
+        Analytics[Analytics Dashboard]
+        Settings[Settings Panel]
+    end
+    
+    subgraph "API Gateway"
+        Router[FastAPI Router]
+    end
+    
+    subgraph "Backend Services"
+        AuthSvc[Auth Service]
+        EmailSvc[Email Service]
+        ClassSvc[Classification Service]
+        FeedbackSvc[Feedback Service]
+        AnalyticsSvc[Analytics Service]
+    end
+    
+    subgraph "ML Layer"
+        TfIdf[TF-IDF Classifier]
+        Keyword[Keyword Classifier]
+        Preprocessor[Text Preprocessor]
+    end
+    
+    subgraph "Data Layer"
+        DB[(SQLite DB)]
+        Cache[LRU Cache]
+        ModelFile[Trained Model]
+    end
+    
+    subgraph "External Services"
+        Gmail[Gmail API]
+    end
+    
+    UI --> Router
+    Auth --> Router
+    Inbox --> Router
+    Analytics --> Router
+    Settings --> Router
+    
+    Router --> AuthSvc
+    Router --> EmailSvc
+    Router --> ClassSvc
+    Router --> FeedbackSvc
+    Router --> AnalyticsSvc
+    
+    AuthSvc --> Gmail
+    EmailSvc --> Gmail
+    
+    ClassSvc --> TfIdf
+    ClassSvc --> Keyword
+    ClassSvc --> Cache
+    
+    TfIdf --> Preprocessor
+    TfIdf --> ModelFile
+    
+    FeedbackSvc --> DB
+    FeedbackSvc --> TfIdf
+    
+    AnalyticsSvc --> DB
+    
+    EmailSvc --> ClassSvc
+    
+    style UI fill:#61dafb
+    style Router fill:#009688
+    style TfIdf fill:#ff6b6b
+    style DB fill:#4caf50
+    style Gmail fill:#ea4335
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Frontend (React + Vite)                  │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  │
-│  │  Inbox   │  │Analytics │  │ Settings │  │ Feedback │  │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘  │
-└────────────────────────┬────────────────────────────────────┘
-                         │ HTTP/REST API
-                         ▼
-┌─────────────────────────────────────────────────────────────┐
-│              Backend (FastAPI + Python)                     │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │  API Layer: Authentication, Email Ops, Analytics     │  │
-│  └──────────────────────────────────────────────────────┘  │
-│         │                  │                  │             │
-│         ▼                  ▼                  ▼             │
-│  ┌────────────┐   ┌────────────┐   ┌────────────┐        │
-│  │   Gmail    │   │     ML     │   │  Database  │        │
-│  │    API     │   │  Pipeline  │   │  (SQLite)  │        │
-│  └────────────┘   └────────────┘   └────────────┘        │
-└─────────────────────────────────────────────────────────────┘
+
+### Email Classification Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant API
+    participant EmailService
+    participant Gmail
+    participant ClassificationService
+    participant MLModel
+    participant Cache
+    participant Database
+    
+    User->>Frontend: Click "Scan Emails"
+    Frontend->>API: POST /api/scan
+    API->>EmailService: fetch_emails()
+    EmailService->>Gmail: Get emails via OAuth
+    Gmail-->>EmailService: Return email list
+    
+    loop For each email
+        EmailService->>ClassificationService: classify_email()
+        ClassificationService->>Cache: Check cache
+        
+        alt Cache Hit
+            Cache-->>ClassificationService: Return cached result
+        else Cache Miss
+            ClassificationService->>MLModel: Preprocess & classify
+            MLModel-->>ClassificationService: Return prediction
+            ClassificationService->>Cache: Store result
+        end
+        
+        ClassificationService-->>EmailService: Classification result
+    end
+    
+    EmailService->>Database: Store classifications
+    EmailService-->>API: Return classified emails
+    API-->>Frontend: JSON response
+    Frontend-->>User: Display categorized emails
 ```
+
 ### Component Breakdown
 
 **Frontend Layer**
@@ -191,12 +286,104 @@ python retrain_robust_model.py
 
 ### 5. Self-Learning Loop
 
+```mermaid
+flowchart TD
+    A[User Views Email] --> B{Classification Correct?}
+    B -->|Yes| C[Continue]
+    B -->|No| D[User Clicks Feedback]
+    
+    D --> E[Select Correct Category]
+    E --> F[Submit Feedback]
+    
+    F --> G[Store in feedback_dataset.csv]
+    G --> H[Increment Feedback Counter]
+    
+    H --> I{Counter >= 50?}
+    I -->|No| J[Wait for More Feedback]
+    I -->|Yes| K[Trigger Auto-Retraining]
+    
+    K --> L[Load Feedback Data]
+    L --> M[Combine with Original Dataset]
+    M --> N[Generate Synthetic Samples]
+    
+    N --> O[Preprocess All Data]
+    O --> P[Train TF-IDF Vectorizers]
+    P --> Q[Train LinearSVC Model]
+    Q --> R[Calibrate Probabilities]
+    
+    R --> S[Evaluate on Test Set]
+    S --> T[Save New Model]
+    T --> U[Restart Backend Service]
+    U --> V[Load Updated Model]
+    
+    V --> W[Reset Counter]
+    W --> J
+    
+    style D fill:#ff6b6b
+    style K fill:#4caf50
+    style T fill:#2196f3
+    style V fill:#ff9800
 ```
-User Feedback → CSV Storage → Threshold Check (50 samples)
-                                      ↓
-                              Automatic Retraining
-                                      ↓
-                              Model Update → Deployment
+
+### 6. ML Classification Pipeline Visualization
+
+```mermaid
+flowchart LR
+    subgraph Input
+        Email[Raw Email]
+    end
+    
+    subgraph Preprocessing
+        Clean[HTML Removal]
+        Extract[Feature Extraction]
+        Normalize[Text Normalization]
+    end
+    
+    subgraph Feature Engineering
+        Domain[Domain Extraction]
+        Subject[Subject Weighting 3x]
+        Metadata[Metadata Tokens]
+        TfIdfWord[TF-IDF Word n-grams]
+        TfIdfChar[TF-IDF Char n-grams]
+    end
+    
+    subgraph Classification
+        Keyword[Keyword Classifier]
+        ML[LinearSVC Model]
+        Hybrid[Hybrid Decision Logic]
+    end
+    
+    subgraph Output
+        Category[Category Label]
+        Confidence[Confidence Score]
+    end
+    
+    Email --> Clean
+    Clean --> Extract
+    Extract --> Normalize
+    
+    Normalize --> Domain
+    Normalize --> Subject
+    Normalize --> Metadata
+    Normalize --> TfIdfWord
+    Normalize --> TfIdfChar
+    
+    Domain --> Keyword
+    Subject --> ML
+    Metadata --> ML
+    TfIdfWord --> ML
+    TfIdfChar --> ML
+    
+    Keyword --> Hybrid
+    ML --> Hybrid
+    
+    Hybrid --> Category
+    Hybrid --> Confidence
+    
+    style Email fill:#e3f2fd
+    style Hybrid fill:#4caf50
+    style Category fill:#ff9800
+    style Confidence fill:#ff9800
 ```
 
 ---
